@@ -3,7 +3,7 @@ module main;
 alias cstring = const(char)*;
 
 
-extern(C) int main(int argc, cstring* argv) {
+version (D_BetterC) extern(C) int main(int argc, cstring* argv) {
 	cstring[] args = argv[0 .. argc];
 	import core.stdc.string : strcmp;
 	if (argc <= 1 || strcmp(args[1], "unittest") == 0) return unittests();
@@ -15,7 +15,6 @@ extern(C) int main(int argc, cstring* argv) {
 int unittests() {
 	enum string[] moduleNames = [
 		"eris.set",
-		"eris",
 	];
 
 	static foreach (moduleName; moduleNames) {

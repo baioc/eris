@@ -99,5 +99,5 @@ if (isMutableSet!(Set, Element))
 
 unittest {
 	assert(1 + 1 == 2);
-	assert(false, "FIXME: just testing unittest");
+	assert(false, "FIXME: just testing unittests");
 }

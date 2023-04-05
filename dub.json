@@ -10,12 +10,47 @@
 	"sourcePaths": ["source/"],
 	"importPaths": [],
 
-	"toolchainRequirements": { "frontend": ">=2.101" },
-	"buildRequirements": ["allowWarnings"],
-	"buildOptions": ["betterC"],
-
 	"dependencies": {
 		"eris:set": "*",
+	},
+
+	"toolchainRequirements": { "frontend": ">=2.101" },
+	"buildRequirements": ["allowWarnings"],
+	"buildTypes": {
+		"debug": {
+			"buildOptions": ["debugMode", "debugInfoC", "betterC"],
+			"dflags-linux-ldc": ["-static"],
+			"dflags-windows-ldc": ["-static"],
+		},
+		"release": {
+			"buildOptions": ["releaseMode", "optimize", "inline", "betterC"],
+			"dflags-linux-ldc": ["-static"],
+			"dflags-windows-ldc": ["-static"],
+		},
+		"release-debug": {
+			"buildOptions": ["releaseMode", "optimize", "inline", "debugInfoC", "betterC"],
+			"dflags-linux-ldc": ["-static"],
+			"dflags-windows-ldc": ["-static"],
+		},
+		"release-nobounds": {
+			"buildOptions": ["releaseMode", "optimize", "inline", "noBoundsCheck", "betterC"],
+			"dflags-linux-ldc": ["-static"],
+			"dflags-windows-ldc": ["-static"],
+		},
+		"unittest": {
+			"buildOptions": ["unittests", "debugMode", "debugInfoC", "betterC"],
+			"dflags-linux-ldc": ["-static"],
+			"dflags-windows-ldc": ["-static"],
+		},
+		"profile": {
+			"buildOptions": ["profile", "optimize", "inline", "debugInfoC", "betterC"],
+			"dflags-linux-ldc": ["-static"],
+			"dflags-windows-ldc": ["-static"],
+		},
+		"unittest-cov": {
+			"buildOptions": ["unittests", "coverage", "debugMode", "debugInfo"],
+			"dflags": ["-main"],
+		},
 	},
 
 	"subPackages": [

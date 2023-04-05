@@ -1,0 +1,12 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Debug unittest",
+			"type": "gdb",
+			"request": "launch",
+			"cwd": "${workspaceRoot}",
+			"target": "eris-test-library",
+		},
+	]
+}
