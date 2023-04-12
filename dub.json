@@ -1,18 +1,19 @@
 {
 	"name": "eris",
 	"description": "A non-standard library for DasBetterC.",
+	"targetType": "library",
 
 	"license": "proprietary",
 	"copyright": "Copyright © 2023, Gabriel B. Sant'Anna",
 	"authors": ["Gabriel B. Sant'Anna"],
 
-	"targetType": "library",
-	"sourcePaths": ["source/"],
-	"importPaths": [],
+	"sourcePaths": [],
+	"sourceFiles": [
+		"source/eris/set.d",
+		"source/eris/package.d",
+	],
 
-	"dependencies": {
-		"eris:set": "*",
-	},
+	"importPaths": ["source/"],
 
 	"toolchainRequirements": { "frontend": ">=2.101" },
 	"buildRequirements": ["allowWarnings"],
@@ -52,16 +53,4 @@
 			"dflags": ["-main"],
 		},
 	},
-
-	"subPackages": [
-		{
-			"name":"set",
-			"description": "Static interfaces, helpers and some implementations for sets.",
-			"targetType": "library",
-			"sourcePaths": [],
-			"sourceFiles": ["source/set.d"],
-			"importPaths": [],
-			"dflags": ["-mv=eris.set=$PACKAGE_DIR/source/set.d"],
-		},
-	],
 }
