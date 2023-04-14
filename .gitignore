@@ -16,3 +16,6 @@ __dummy.html
 docs/
 
 eris-test-*
+
+perf.data*
+*.flamegraph

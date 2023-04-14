@@ -2,10 +2,10 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "dub: Run unittests",
+			"label": "D: Run unittests",
 			"group": {
 				"kind": "test",
-				"isDefault": true,
+				"isDefault": false,
 			},
 			"type": "shell",
 			"command": "dub test --main-file=tests/main.d --compiler=ldc2 && ! ldd eris-test-library",
@@ -25,10 +25,10 @@
 			},
 		},
 		{
-			"label": "dub: Test coverage",
+			"label": "D: Test coverage",
 			"group": {
 				"kind": "test",
-				"isDefault": false,
+				"isDefault": true,
 			},
 			"type": "shell",
 			"command": "dub test --main-file=tests/main.d --coverage",
@@ -48,13 +48,38 @@
 			},
 		},
 		{
-			"label": "dub: Generate docs",
+			"label": "D: Generate docs",
 			"group": {
 				"kind": "build",
 				"isDefault": true,
 			},
 			"type": "shell",
 			"command": "dub build --build=docs",
+			"problemMatcher": {
+				"owner": "d",
+				"fileLocation": ["relative", "${workspaceFolder}"],
+				"pattern": {
+					"regexp": "^(.*)\\((\\d+,\\d+)\\): (Error|Warning|Deprecation): (.*)$",
+					"file": 1,
+					"location": 2,
+					"severity": 3,
+					"message": 4,
+				}
+			},
+			"presentation": {
+				"echo": false,
+				"clear": true,
+				"reveal": "silent",
+			},
+		},
+		{
+			"label": "D: Profile mode",
+			"group": {
+				"kind": "build",
+				"isDefault": false,
+			},
+			"type": "shell",
+			"command": "ldmd2 -wi -release -O -g -noboundscheck -Isource/ tests/main.d -oferis-test-library",
 			"problemMatcher": {
 				"owner": "d",
 				"fileLocation": ["relative", "${workspaceFolder}"],

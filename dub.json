@@ -43,11 +43,6 @@
 			"dflags-linux-ldc": ["-static"],
 			"dflags-windows-ldc": ["-static"],
 		},
-		"profile": {
-			"buildOptions": ["profile", "optimize", "inline", "debugInfoC", "betterC"],
-			"dflags-linux-ldc": ["-static"],
-			"dflags-windows-ldc": ["-static"],
-		},
 		"unittest-cov": {
 			"buildOptions": ["unittests", "coverage", "debugMode", "debugInfo"],
 			"dflags": ["-main"],
