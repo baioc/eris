@@ -8,6 +8,7 @@
 *.dll
 *.a
 *.lib
+*.s
 
 .dub
 dub.selections.json

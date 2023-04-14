@@ -97,5 +97,30 @@
 				"reveal": "silent",
 			},
 		},
+		{
+			"label": "D: View assembly",
+			"group": {
+				"kind": "build",
+				"isDefault": false,
+			},
+			"type": "shell",
+			"command": "ldmd2 -wi -release -O -g -noboundscheck -Isource/ tests/main.d -vasm && rm main main.o; ddemangle main.s > eris-test-library.s",
+			"problemMatcher": {
+				"owner": "d",
+				"fileLocation": ["relative", "${workspaceFolder}"],
+				"pattern": {
+					"regexp": "^(.*)\\((\\d+,\\d+)\\): (Error|Warning|Deprecation): (.*)$",
+					"file": 1,
+					"location": 2,
+					"severity": 3,
+					"message": 4,
+				}
+			},
+			"presentation": {
+				"echo": false,
+				"clear": true,
+				"reveal": "silent",
+			},
+		},
 	],
 }
