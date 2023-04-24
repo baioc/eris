@@ -36,7 +36,8 @@ err_t benchmark(const(stringz[]) args) {
 	if (n < 1) return 1;
 	const type = args[0];
 	if (strcmp(type, "aaset") == 0 && n >= 3)  return benchmarkAASet(atoi(args[1]), args[2][0]);
-	if (strcmp(type, "rbtree") == 0 && n >= 3) return benchmarkRBTree(atoi(args[1]), args[2][0]);
+	if (strcmp(type, "redblack") == 0 && n >= 3) return benchmarkRedBlackTree(atoi(args[1]), args[2][0]);
+	if (strcmp(type, "btree") == 0 && n >= 3) return benchmarkBTree(atoi(args[1]), args[2][0]);
 	return 1;
 }
 
@@ -60,74 +61,82 @@ double microBenchMark(
 }
 
 
-err_t benchmarkAASet(int n, char mode) {
+err_t benchmarkUpsertReadRemove(string name, string init, string upsert, string read, string remove)(
+	int n, char mode
+) {
 	if (n < 0) return 1;
-	version (D_BetterC) {} else {
-		double elapsedMs = (const(int[]) inputs, out begin, out end){
-			import eris.set : AASet;
-			auto set = new AASet!ulong();
-			switch (mode) {
-				case 'w': // only measure insertions
-					begin = clock();
-					foreach (i; 0 .. n) set.upsert(inputs[i]);
-					end = clock();
-					break;
-
-				case 'r': // only measure reads
-					foreach (i; 0 .. n) set.upsert(inputs[i]);
-					begin = clock();
-					foreach (i; 0 .. n) auto b = set.contains(inputs[i]);
-					end = clock();
-					break;
-
-				case 'x': // measure insert+read+remove
-					begin = clock();
-					foreach (i; 0 .. n) set.upsert(inputs[i]);
-					foreach (i; 0 .. n) auto b = set.contains(inputs[i]);
-					foreach (i; 0 .. n) set.remove(inputs[i]);
-					end = clock();
-					break;
-
-				default: assert(0);
-			}
-		}.microBenchMark(n);
-		printf("AASet: %.3f ns/element\n", elapsedMs * 1e6 / n);
-	}
+	double elapsedMs = (const(int[]) inputs, out begin, out end){
+		mixin(init);
+		switch (mode) {
+			case 'w': // only measure insertions
+				begin = clock();
+				foreach (x; inputs) { mixin(upsert); }
+				end = clock();
+				break;
+			case 'r': // only measure reads
+				foreach (x; inputs) { mixin(upsert); }
+				begin = clock();
+				foreach (x; inputs) { mixin(read); }
+				end = clock();
+				break;
+			case 'x': // measure insert+read+remove
+				begin = clock();
+				foreach (x; inputs) { mixin(upsert); }
+				foreach (x; inputs) { mixin(read); }
+				foreach (x; inputs) { mixin(remove); }
+				end = clock();
+				break;
+			default: assert(0);
+		}
+	}.microBenchMark(n);
+	printf("%.*s: %.3f ns/element\n", cast(int) name.length, name.ptr, elapsedMs * 1e6 / n);
 	return 0;
 }
 
-err_t benchmarkRBTree(int n, char mode) {
-	if (n < 0) return 1;
-	version (D_BetterC) {} else {
-		double elapsedMs = (const(int[]) inputs, out begin, out end){
-			import std.container.rbtree;
-			auto set = redBlackTree!ulong();
-			switch (mode) {
-				case 'w': // only measure insertions
-					begin = clock();
-					foreach (i; 0 .. n) set.insert(inputs[i]);
-					end = clock();
-					break;
-
-				case 'r': // only measure reads
-					foreach (i; 0 .. n) set.insert(inputs[i]);
-					begin = clock();
-					foreach (i; 0 .. n) auto b = inputs[i] in set;
-					end = clock();
-					break;
-
-				case 'x': // measure insert+read+remove
-					begin = clock();
-					foreach (i; 0 .. n) set.insert(inputs[i]);
-					foreach (i; 0 .. n) auto b = inputs[i] in set;
-					foreach (i; 0 .. n) set.removeKey(inputs[i]);
-					end = clock();
-					break;
-
-				default: assert(0);
-			}
-		}.microBenchMark(n);
-		printf("RedBlackTree: %.3f ns/element\n", elapsedMs * 1e6 / n);
+err_t benchmarkAASet(int n, char mode) {
+	version (D_BetterC) {
+		assert(0, "no AAs in betterC mode");
+	} else {
+		return benchmarkUpsertReadRemove!("AA-as-set",
+			q{
+				alias Unit = void[0];
+				Unit[ulong] set;
+			},
+			q{ set[x] = Unit.init; },
+			q{ auto b = x in set; },
+			q{ set.remove(x); },
+		)(n, mode);
 	}
-	return 0;
+}
+
+err_t benchmarkRedBlackTree(int n, char mode) {
+	version (D_BetterC) {
+		assert(0, "no std.container.rbtree in betterC mode");
+	} else {
+		return benchmarkUpsertReadRemove!("std.container.rbtree",
+			q{
+				import std.container.rbtree;
+				auto set = redBlackTree!ulong();
+			},
+			q{ set.insert(x); },
+			q{ auto b = x in set; },
+			q{ set.removeKey(x); },
+		)(n, mode);
+	}
+}
+
+err_t benchmarkBTree(int n, char mode) {
+	version (D_BetterC) {
+		assert(0, "FIXME: no eris.set:BTree in betterC (yet)");
+	} else {
+		return benchmarkUpsertReadRemove!("eris:BTree",
+			q{
+				import eris.set;
+				BTree!ulong set;
+			},
+			q{ set.upsert(x); },
+			q{ auto p = set.at(x); },
+			q{ assert(0, "FIXME: implement BTree removal"); },
+		)(n, mode);
+	}
 }
