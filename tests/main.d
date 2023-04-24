@@ -5,18 +5,20 @@ import core.stdc.stdlib : atoi, rand, srand, malloc, free;
 import core.stdc.time : clock, clock_t, CLOCKS_PER_SEC;
 import core.stdc.stdio : printf;
 
-alias cstring = const(char)*;
+import eris.core : stringz, err_t;
 
 
-version (D_Coverage) {} else extern(C) int main(int argc, cstring* argv) {
-	cstring[] args = argv[0 .. argc];
+version (D_Coverage) {} else extern(C) err_t main(int argc, const(stringz)* argv) {
+	const(stringz)[] args = argv[0 .. argc];
 	if (argc <= 1 || strcmp(args[1], "unittest") == 0) return unittests();
 	else if (strcmp(args[1], "benchmark") == 0)        return benchmark(args[2..$]);
 	return 1;
 }
 
-int unittests() {
+err_t unittests() {
 	enum string[] moduleNames = [
+		"eris.core",
+		"eris.typecons",
 		"eris.set",
 	];
 	static foreach (moduleName; moduleNames) {
@@ -29,10 +31,10 @@ int unittests() {
 }
 
 
-int benchmark(const(cstring[]) args) {
+err_t benchmark(const(stringz[]) args) {
 	const n = args.length;
 	if (n < 1) return 1;
-	const cstring type = args[0];
+	const type = args[0];
 	if (strcmp(type, "aaset") == 0 && n >= 3)  return benchmarkAASet(atoi(args[1]), args[2][0]);
 	if (strcmp(type, "rbtree") == 0 && n >= 3) return benchmarkRBTree(atoi(args[1]), args[2][0]);
 	return 1;
@@ -58,7 +60,7 @@ double microBenchMark(
 }
 
 
-int benchmarkAASet(int n, char mode) {
+err_t benchmarkAASet(int n, char mode) {
 	if (n < 0) return 1;
 	version (D_BetterC) {} else {
 		double elapsedMs = (const(int[]) inputs, out begin, out end){
@@ -94,7 +96,7 @@ int benchmarkAASet(int n, char mode) {
 	return 0;
 }
 
-int benchmarkRBTree(int n, char mode) {
+err_t benchmarkRBTree(int n, char mode) {
 	if (n < 0) return 1;
 	version (D_BetterC) {} else {
 		double elapsedMs = (const(int[]) inputs, out begin, out end){

@@ -79,7 +79,7 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "ldmd2 -wi -release -O -g -noboundscheck -Isource/ tests/main.d -oferis-test-library",
+			"command": "ldmd2 -wi -preview=fieldwise -preview=bitfields -release -O -g -noboundscheck -Isource/ tests/main.d -oferis-test-library",
 			"problemMatcher": {
 				"owner": "d",
 				"fileLocation": ["relative", "${workspaceFolder}"],
@@ -94,7 +94,6 @@
 			"presentation": {
 				"echo": false,
 				"clear": true,
-				"reveal": "silent",
 			},
 		},
 		{
@@ -104,7 +103,7 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "ldmd2 -wi -release -O -g -noboundscheck -Isource/ tests/main.d -vasm && rm main main.o; ddemangle main.s > eris-test-library.s",
+			"command": "ldmd2 -wi -preview=fieldwise -preview=bitfields -release -O -g -noboundscheck -Isource/ tests/main.d -vasm && rm main main.o; ddemangle main.s > eris-test-library.s",
 			"problemMatcher": {
 				"owner": "d",
 				"fileLocation": ["relative", "${workspaceFolder}"],
@@ -119,7 +118,6 @@
 			"presentation": {
 				"echo": false,
 				"clear": true,
-				"reveal": "silent",
 			},
 		},
 	],

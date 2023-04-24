@@ -9,6 +9,8 @@
 
 	"sourcePaths": [],
 	"sourceFiles": [
+		"source/eris/core.d",
+		"source/eris/typecons.d",
 		"source/eris/set.d",
 		"source/eris/package.d",
 	],
@@ -17,6 +19,7 @@
 
 	"toolchainRequirements": { "frontend": ">=2.101" },
 	"buildRequirements": ["allowWarnings"],
+	"dflags": ["-preview=fieldwise"],
 	"buildTypes": {
 		"debug": {
 			"buildOptions": ["debugMode", "debugInfoC", "betterC"],
@@ -46,6 +49,7 @@
 		"unittest-cov": {
 			"buildOptions": ["unittests", "coverage", "debugMode", "debugInfo"],
 			"dflags": ["-main"],
+			"dflags-ldc": ["-main", "--fsanitize=address"],
 		},
 	},
 }
