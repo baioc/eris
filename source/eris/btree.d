@@ -1,7 +1,7 @@
 /// Generic B-Tree data structure.
 module eris.btree;
 
-import eris.typecons : makeFluent;
+import eris.core : hash_t;
 
 
 /// Static parameters for [BTree] template. Use `size_t.max` for defaults.
@@ -13,11 +13,8 @@ struct BTreeParameters {
 	size_t binarySearchThreshold = size_t.max;
 }
 
-mixin makeFluent!BTreeParameters;
 
 // TODO: make this betterC-compatible
-// TODO: destructor = void dispose()
-// TODO: toHash, opEquals, toString
 version (D_BetterC) {} else {
 
 /// B-Tree template.
@@ -41,11 +38,11 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
  private:
 	struct TreeNode {
 		import std.bitmanip : bitfields;
+		T[nodeSlots] slots;
 		mixin(bitfields!(
 			uint, "slotsInUse", 31,
 			bool, "isInternal", 1)
 		);
-		T[nodeSlots] slots;
 		static opCall(bool isInternal = false) {
 			TreeNode n;
 			n.isInternal = isInternal;
@@ -66,6 +63,13 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	size_t totalInUse = 0;
 
  public:
+	/// Empties the tree.
+ 	void clear() {
+		// TODO: update this after implementing destructor = void dispose()
+		this.root = null;
+		this.totalInUse = 0;
+	}
+
  	/// Implements [eris.set.ExtensionalSet.length]
 	@property size_t length() const => this.totalInUse;
 
@@ -119,11 +123,19 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	/// ditto
 	T* upsert(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
 
-	// TODO: these
-	// bool remove(in T x, scope void delegate(ref T) destroy = null);
-	// void clear();
-	// size_t capacity() const;
-	// size_t reserve(size_t n);
+	// TODO: bool remove(in T x, scope void delegate(ref T) destroy = null);
+
+	bool opEquals(BTreeParameters params)(in BTree!(T, params) other) const {
+		if (this.length != other.length) return false;
+		foreach (ref const x; this) if (!(x in other)) return false;
+		return true;
+	}
+
+	hash_t toHash() const {
+		hash_t hash = 0;
+		foreach (ref const x; this) hash = .hashOf(x, hash);
+		return hash;
+	}
 
  private:
 	import eris.core : insertInPlaceDropLast;
@@ -356,10 +368,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 }
 
 unittest {
-	alias Tree = BTree!(int, BTreeParameters()
-		.withBinarySearchThreshold(2)
-		.withNodeSlots(3)
-	);
+	enum BTreeParameters params = { binarySearchThreshold: 2, nodeSlots: 3 };
+	alias Tree = BTree!(int, params);
 	Tree btree;
 
 	static const payload = [
@@ -410,6 +420,13 @@ unittest {
 	foreach (ref const x; btree) {
 		import eris.set : contains;
 		assert(payload.contains(x));
+	}
+
+	version (D_BetterC) {} else {
+		bool[Tree] hashtable;
+		assert(!(btree in hashtable));
+		hashtable[btree] = true;
+		assert(btree in hashtable);
 	}
 }
 

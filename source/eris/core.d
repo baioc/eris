@@ -4,6 +4,7 @@ module eris.core;
 
 /// D uses `size_t` for hash values.
 alias hash_t = size_t;
+static assert(__traits(isUnsigned, hash_t));
 
 /// C-style null-terminated string.
 alias stringz = char*;

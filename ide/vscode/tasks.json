@@ -79,9 +79,9 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "dub run adrdox@2.5.3 -- . -i -o docs",
+			"command": "dub run adrdox@2.5.3 -- . -i -o docs && sed -z 's/-contract {\\n\\s*display: none;\\n/-contract {\\n/' -i docs/style.css",
 			"presentation": {
-				"echo": false,
+				"echo": true,
 				"clear": true,
 				"reveal": "silent",
 			},

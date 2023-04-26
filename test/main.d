@@ -18,7 +18,6 @@ version (D_Coverage) {} else extern(C) err_t main(int argc, const(stringz)* argv
 err_t unittests() {
 	enum string[] moduleNames = [
 		"eris.core",
-		"eris.typecons",
 		"eris.btree",
 		"eris.set",
 	];
