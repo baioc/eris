@@ -15,6 +15,7 @@ dub.selections.json
 docs.json
 __dummy.html
 docs/
+skeleton.html
 
 eris-test-*
 

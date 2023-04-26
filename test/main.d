@@ -19,6 +19,7 @@ err_t unittests() {
 	enum string[] moduleNames = [
 		"eris.core",
 		"eris.typecons",
+		"eris.btree",
 		"eris.set",
 	];
 	static foreach (moduleName; moduleNames) {
@@ -100,9 +101,10 @@ err_t benchmarkAASet(int n, char mode) {
 		return benchmarkUpsertReadRemove!("AA-as-set",
 			q{
 				alias Unit = void[0];
+				enum unit = Unit.init;
 				Unit[ulong] set;
 			},
-			q{ set[x] = Unit.init; },
+			q{ set[x] = unit; },
 			q{ auto b = x in set; },
 			q{ set.remove(x); },
 		)(n, mode);
@@ -131,11 +133,11 @@ err_t benchmarkBTree(int n, char mode) {
 	} else {
 		return benchmarkUpsertReadRemove!("eris:BTree",
 			q{
-				import eris.set;
+				import eris.btree;
 				BTree!ulong set;
 			},
 			q{ set.upsert(x); },
-			q{ auto p = set.at(x); },
+			q{ auto p = x in set; },
 			q{ assert(0, "FIXME: implement BTree removal"); },
 		)(n, mode);
 	}

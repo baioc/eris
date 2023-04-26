@@ -2,13 +2,38 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "D: Build project",
+			"group": {
+				"kind": "build",
+				"isDefault": true,
+			},
+			"type": "shell",
+			"command": "dub build --build debug",
+			"problemMatcher": {
+				"owner": "d",
+				"fileLocation": ["relative", "${workspaceFolder}"],
+				"pattern": {
+					"regexp": "^(.*)\\((\\d+,\\d+)\\): (Error|Warning|Deprecation): (.*)$",
+					"file": 1,
+					"location": 2,
+					"severity": 3,
+					"message": 4,
+				}
+			},
+			"presentation": {
+				"echo": false,
+				"clear": true,
+				"reveal": "silent",
+			},
+		},
+		{
 			"label": "D: Run unittests",
 			"group": {
 				"kind": "test",
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "dub test --main-file=tests/main.d --compiler=ldc2 && ! ldd eris-test-library",
+			"command": "dub test --main-file=test/main.d --compiler=ldc2 && ! ldd eris-test-library",
 			"problemMatcher": {
 				"owner": "d",
 				"fileLocation": ["relative", "${workspaceFolder}"],
@@ -20,7 +45,7 @@
 				}
 			},
 			"presentation": {
-				"echo": false,
+				"echo": true,
 				"clear": true,
 			},
 		},
@@ -31,7 +56,7 @@
 				"isDefault": true,
 			},
 			"type": "shell",
-			"command": "dub test --main-file=tests/main.d --coverage",
+			"command": "dub test --main-file=test/main.d --coverage",
 			"problemMatcher": {
 				"owner": "d",
 				"fileLocation": ["relative", "${workspaceFolder}"],
@@ -51,21 +76,10 @@
 			"label": "D: Generate docs",
 			"group": {
 				"kind": "build",
-				"isDefault": true,
+				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "dub build --build=docs",
-			"problemMatcher": {
-				"owner": "d",
-				"fileLocation": ["relative", "${workspaceFolder}"],
-				"pattern": {
-					"regexp": "^(.*)\\((\\d+,\\d+)\\): (Error|Warning|Deprecation): (.*)$",
-					"file": 1,
-					"location": 2,
-					"severity": 3,
-					"message": 4,
-				}
-			},
+			"command": "dub run adrdox@2.5.3 -- . -i -o docs",
 			"presentation": {
 				"echo": false,
 				"clear": true,
@@ -79,20 +93,9 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "ldmd2 -wi -preview=fieldwise -preview=bitfields -release -O -g -noboundscheck -Isource/ tests/main.d -oferis-test-library",
-			"problemMatcher": {
-				"owner": "d",
-				"fileLocation": ["relative", "${workspaceFolder}"],
-				"pattern": {
-					"regexp": "^(.*)\\((\\d+,\\d+)\\): (Error|Warning|Deprecation): (.*)$",
-					"file": 1,
-					"location": 2,
-					"severity": 3,
-					"message": 4,
-				}
-			},
+			"command": "ldmd2 -wi -preview=fieldwise -release -O -g -noboundscheck -Isource/ test/main.d -oferis-test-library",
 			"presentation": {
-				"echo": false,
+				"echo": true,
 				"clear": true,
 			},
 		},
@@ -103,21 +106,11 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "ldmd2 -wi -preview=fieldwise -preview=bitfields -release -O -g -noboundscheck -Isource/ tests/main.d -vasm && rm main main.o; ddemangle main.s > eris-test-library.s",
-			"problemMatcher": {
-				"owner": "d",
-				"fileLocation": ["relative", "${workspaceFolder}"],
-				"pattern": {
-					"regexp": "^(.*)\\((\\d+,\\d+)\\): (Error|Warning|Deprecation): (.*)$",
-					"file": 1,
-					"location": 2,
-					"severity": 3,
-					"message": 4,
-				}
-			},
+			"command": "ldmd2 -wi -preview=fieldwise -release -O -g -noboundscheck -Isource/ test/main.d -vasm && rm main main.o; ddemangle main.s > eris-test-library.s",
 			"presentation": {
-				"echo": false,
+				"echo": true,
 				"clear": true,
+				"reveal": "silent",
 			},
 		},
 	],

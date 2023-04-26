@@ -11,6 +11,7 @@
 	"sourceFiles": [
 		"source/eris/core.d",
 		"source/eris/typecons.d",
+		"source/eris/btree.d",
 		"source/eris/set.d",
 		"source/eris/package.d",
 	],

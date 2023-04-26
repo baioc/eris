@@ -2,7 +2,7 @@
 module eris.typecons;
 
 
-/// Generate fluent setter functions `withField` for each (given) field of an aggregate type.
+/// Generate fluent setters for each (given) field of an aggregate type.
 mixin template makeFluent(Aggregate, fieldNames...) {
 	import std.ascii : toUpper;
 	static foreach (fieldName; fieldNames) {
