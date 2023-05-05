@@ -13,7 +13,6 @@ struct BTreeParameters {
 	size_t binarySearchThreshold = size_t.max;
 }
 
-
 // TODO: make this betterC-compatible
 version (D_BetterC) {} else {
 
@@ -52,11 +51,12 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	static assert(!TreeNode.init.isInternal);
 
 	struct InternalNode {
-		TreeNode node = TreeNode(true);
-		alias node this;
+		TreeNode asTreeNode = TreeNode(true);
+		alias asTreeNode this;
 		TreeNode*[nodeSlots+1] children;
 	}
 	static assert(InternalNode.init.isInternal);
+	static assert(InternalNode.asTreeNode.offsetof == 0);
 
  private:
 	TreeNode* root = null;
@@ -64,17 +64,17 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
  public:
 	/// Empties the tree.
- 	void clear() {
+	void clear() {
 		// TODO: update this after implementing destructor = void dispose()
 		this.root = null;
 		this.totalInUse = 0;
 	}
 
- 	/// Implements [eris.set.ExtensionalSet.length]
-	@property size_t length() const => this.totalInUse;
+	/// Implements [eris.set.ExtensionalSet.contains]
+	bool opBinaryRight(string op : "in")(in T x) inout => this[x] != null;
 
-	/// Implements [eris.set.ExtensionalSet.at]
-	inout(T)* opBinaryRight(string op : "in")(in T x) inout => search(this.root, x);
+	/// Implements [eris.set.ExtensionalSet.length]
+	@property size_t length() const => this.totalInUse;
 
 	/// Iterate over set elements.
 	int opApply(scope int delegate(ref T) dg) => opApply(this.root, dg);
@@ -84,13 +84,13 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		return (cast(BTree) this).opApply(cast(int delegate(ref T)) dg);
 	}
 
-	/// References an element in the set assuming it is present.
-	ref inout(T) opIndex(in T x) inout in (x in this) => *(x in this);
+	/// Implements [eris.set.ExtensionalSet.at]
+	inout(T)* opIndex(in T x) inout => search(this.root, x);
 
 	/// Implements [eris.set.MutableSet.upsert]
 	T* upsert(in T x, scope T delegate() create, scope void delegate(ref T) update = null)
 	in (create != null)
-	out (p; !!(x in this) == (p != null))
+	out (p; (x in this) == (p != null))
 	{
 		// root node is lazily allocated as a leaf (at first)
 		if (this.root == null) this.root = new TreeNode();
@@ -116,21 +116,27 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		oldRoot.slotsInUse = oldRoot.slotsInUse - 1;
 		newRoot.children[0] = oldRoot;
 		newRoot.children[1] = splitNode;
-		this.root = cast(TreeNode*) newRoot;
+		this.root = &newRoot.asTreeNode;
 		return moveInserted ? &newRoot.slots[0] : inserted;
 	}
 
 	/// ditto
 	T* upsert(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
 
-	// TODO: bool remove(in T x, scope void delegate(ref T) destroy = null);
+	/// Implements [eris.set.MutableSet.remove]
+	bool remove(in T x, scope void delegate(ref T) destroy = null) {
+		if (this.root == null) return false;
+		return searchAndRemove(this.root, x, destroy);
+	}
 
+	/// Element-wise comparison.
 	bool opEquals(BTreeParameters params)(in BTree!(T, params) other) const {
 		if (this.length != other.length) return false;
-		foreach (ref const x; this) if (!(x in other)) return false;
+		foreach (ref const x; this) if (x !in other) return false;
 		return true;
 	}
 
+	/// Combined element hash.
 	hash_t toHash() const {
 		hash_t hash = 0;
 		foreach (ref const x; this) hash = .hashOf(x, hash);
@@ -138,14 +144,175 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	}
 
  private:
-	import eris.core : insertInPlaceDropLast;
+	// tip: use visualizer at https://www.cs.usfca.edu/~galles/visualization/BTree.html
+	import eris.array : shift, shiftLeft, unshift;
+
+	// recursively search for an element to delete
+	bool searchAndRemove(TreeNode* node, in T x, scope void delegate(ref T) destroy)
+	in (node != null)
+	{
+		// if the element is found at this level, destroy it and clear the slot
+		int pos = bisect(node.slots[0 .. node.slotsInUse], x);
+		if (pos >= 0) {
+			this.totalInUse -= 1;
+			if (destroy != null) destroy(node.slots[pos]);
+			clearSlot(node, pos);
+			return true;
+		}
+
+		// at leafs, declare not found, but try deeper at internal nodes
+		if (!node.isInternal) return false;
+		auto internalNode = cast(InternalNode*) node;
+		const int child = pos & ~(1 << 31);
+		bool found = searchAndRemove(internalNode.children[child], x, destroy);
+		if (!found) return false;
+		rebalanceIfNeeded(internalNode, child);
+		return true;
+	}
+
+	// adjust a node just after destroying an element at the given slot
+	void clearSlot(TreeNode* node, int pos) {
+		// at leaf nodes, we just have to shift slots
+		if (!node.isInternal) {
+			shiftLeft(node.slots[pos .. node.slotsInUse]);
+			node.slotsInUse = node.slotsInUse - 1;
+			return;
+		}
+
+		// else, steal biggest element of the left *subtree* and rebalance on the way up
+		auto parent = cast(InternalNode*) node;
+		void removeBiggest(TreeNode* current) {
+			assert(current != null);
+			if (!current.isInternal) {
+				move(current.slots[current.slotsInUse - 1] , parent.slots[pos]);
+				current.slotsInUse = current.slotsInUse - 1;
+			} else {
+				auto internalNode = cast(InternalNode*) current;
+				removeBiggest(internalNode.children[internalNode.slotsInUse]);
+				rebalanceIfNeeded(internalNode, internalNode.slotsInUse);
+			}
+		}
+		TreeNode* left = parent.children[pos];
+		removeBiggest(left);
+		rebalanceIfNeeded(parent, pos);
+	}
+
+	// rebalance after removing *at most one* element from the given child node
+	void rebalanceIfNeeded(InternalNode* parent, int childIndex)
+	in (parent != null && childIndex >= 0 && childIndex <= parent.slotsInUse)
+	{
+		TreeNode* child = parent.children[childIndex];
+		assert(child != null);
+
+		// leafs only need rebalancing when they're completely empty
+		if (!child.isInternal && child.slotsInUse >= 1) return;
+
+		// we can also skip internal nodes with enough remaining load
+		enum uint minLoad = nodeSlots / 2;
+		static assert(minLoad > 0);
+		if (child.isInternal && child.slotsInUse >= minLoad) return;
+
+		// at this point, we know the child is deficient, so we'll start by
+		// checking if its siblings (when they exist) have spare slots to give
+		TreeNode* leftSibling = childIndex > 0 ? parent.children[childIndex - 1] : null;
+		TreeNode* rightSibling = childIndex < parent.slotsInUse ? parent.children[childIndex + 1] : null;
+		bool existsAndHasSpare(TreeNode* node) {
+			if (node == null) return false;
+			else if (node.isInternal) return node.slotsInUse > 1;
+			else return node.slotsInUse > minLoad;
+		}
+
+		// rotate left
+		if (existsAndHasSpare(rightSibling)) {
+			move(parent.slots[childIndex], child.slots[child.slotsInUse]);
+			move(rightSibling.slots[0], parent.slots[childIndex]);
+			shiftLeft(rightSibling.slots[0 .. rightSibling.slotsInUse]);
+			if (child.isInternal) {
+				auto childAsInternal = cast(InternalNode*) child;
+				auto rightAsInternal = cast(InternalNode*) rightSibling;
+				TreeNode* sparePointer = unshift(rightAsInternal.children[0 .. rightSibling.slotsInUse + 1], 0);
+				childAsInternal.children[child.slotsInUse + 1] = sparePointer;
+			}
+			child.slotsInUse = child.slotsInUse + 1;
+			rightSibling.slotsInUse = rightSibling.slotsInUse - 1;
+
+		// rotate right
+		} else if (existsAndHasSpare(leftSibling)) {
+			child.slotsInUse = child.slotsInUse + 1;
+			shift(child.slots[0 .. child.slotsInUse], 0, parent.slots[childIndex - 1]);
+			move(leftSibling.slots[leftSibling.slotsInUse - 1], parent.slots[childIndex - 1]);
+			if (child.isInternal) {
+				auto leftAsInternal = cast(InternalNode*) leftSibling;
+				auto childAsInternal = cast(InternalNode*) child;
+				TreeNode* sparePointer = move(leftAsInternal.children[leftSibling.slotsInUse]);
+				shift(childAsInternal.children[0 .. child.slotsInUse + 1], 0, sparePointer);
+			}
+			leftSibling.slotsInUse = leftSibling.slotsInUse - 1;
+
+		// merge two side-by-side children and delete the one on the right
+		} else {
+			TreeNode* left, right;
+			int separatorIndex = -1;
+			if (rightSibling != null) {
+				left = child;
+				right = rightSibling;
+				separatorIndex = childIndex;
+			} else {
+				assert(leftSibling != null);
+				left = leftSibling;
+				right = child;
+				separatorIndex = childIndex - 1;
+			}
+
+			move(parent.slots[separatorIndex], left.slots[left.slotsInUse]);
+			foreach (int i; 0 .. right.slotsInUse) {
+				move(right.slots[i], left.slots[left.slotsInUse + 1 + i]);
+			}
+			if (child.isInternal) {
+				auto leftAsInternal = cast(InternalNode*) left;
+				auto rightAsInternal = cast(InternalNode*) right;
+				foreach (int i; 0 .. right.slotsInUse + 1) {
+					move(rightAsInternal.children[i], leftAsInternal.children[left.slotsInUse + 1 + i]);
+				}
+			}
+			left.slotsInUse = left.slotsInUse + 1 + right.slotsInUse;
+			right.slotsInUse = 0;
+
+			shiftLeft(parent.slots[separatorIndex .. parent.slotsInUse]);
+			shiftLeft(parent.children[separatorIndex + 1 .. parent.slotsInUse + 1]);
+			parent.slotsInUse = parent.slotsInUse - 1;
+			// TODO: explicitly deallocate right node
+
+			// if the root just became empty, delete it and make the tree shallower
+			// by using the merged node as the new root; else just rebalance the current node
+			if (&parent.asTreeNode == this.root && this.root.slotsInUse == 0) {
+				this.root = left;
+				// TODO: explicitly deallocate old root
+			}
+		}
+	}
+
+ static:
+	inout(T)* search(inout(TreeNode*) node, in T key) {
+		// search this node's slots (if not null)
+		if (node == null) return null;
+		const m = node.slotsInUse;
+		int pos = bisect(node.slots[0 .. m], key);
+		// on leaf nodes, we either found it or we give up
+		if (pos >= 0) return &node.slots[pos];
+		else if (!node.isInternal) return null;
+		// but on internal nodes, we tail-recursively search a specific child
+		auto internalNode = cast(inout(InternalNode*)) node;
+		int child = pos & ~(1 << 31);
+		return search(internalNode.children[child], key);
+	}
 
 	// performs a sorted search for a given needle x, returning the leftmost
 	// index i such that haystack[0 .. |i|) < x <= haystack[|i| .. $); this index
 	// will have its sign bit set to 1 iff x < haystack[i] (needle not found),
 	// so a sign bit of 0 indicates that the needle was found at haystack[i];
 	// NOTE: do NOT clear the sign bit with negation, as int.min is a possibility
-	static int bisect(in T[] haystack, in T needle)
+	int bisect(in T[] haystack, in T needle)
 	out (pos) {
 		if (pos >= 0) assert(haystack[pos] == needle);
 		else assert((pos & ~(1 << 31)) <= haystack.length);
@@ -177,22 +344,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		}
 	}
 
-	static inout(T)* search(inout(TreeNode*) node, in T key) {
-		// search this node's slots (if not null)
-		if (node == null) return null;
-		const m = node.slotsInUse;
-		int pos = bisect(node.slots[0 .. m], key);
-		// on leaf nodes, we either found it or we give up
-		if (pos >= 0) return &node.slots[pos];
-		else if (!node.isInternal) return null;
-		// but on internal nodes, we tail-recursively search a specific child
-		auto internalNode = cast(inout(InternalNode*)) node;
-		int child = pos & ~(1 << 31);
-		return search(internalNode.children[child], key);
-	}
-
 	// in-order iteration over used slots
-	static int opApply(TreeNode* node, scope int delegate(ref T) dg) {
+	int opApply(TreeNode* node, scope int delegate(ref T) dg) {
 		if (node == null) return 0;
 		const m = node.slotsInUse;
 		if (node.isInternal) {
@@ -214,21 +367,89 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		}
 	}
 
+	// update an existing element or create a matching one and add it to the tree
+	T* insert(
+		TreeNode* node,
+		in T x,
+		scope T delegate() create,
+		scope void delegate(ref T) update,
+		out TreeNode* splitNode,
+	)
+	in (node != null && create != null && update != null)
+	{
+		// search this (non-null) node's slots
+		int pos = bisect(node.slots[0 .. node.slotsInUse], x);
+
+		// if found, just return the right address
+		if (pos >= 0) {
+			update(node.slots[pos]);
+			return &node.slots[pos];
+		}
+		pos &= ~(1 << 31);
+
+		// when a leaf is reached and has space, insert right there
+		if (!node.isInternal && node.slotsInUse < nodeSlots) {
+			node.slotsInUse = node.slotsInUse + 1;
+			shift(node.slots[0 .. node.slotsInUse], pos, create());
+			return &node.slots[pos];
+		}
+
+		// when the leaf has no slots left, we'll split it in two
+		if (!node.isInternal && node.slotsInUse == nodeSlots) {
+			// we'll always create a new right node, but the split is not so
+			// trivial because there's still a pending insertion
+			splitNode = new TreeNode();
+			return split(node, splitNode, create(), pos);
+		}
+
+		// these last cases handle an internal node which doesnt't itself contain
+		// x, so we know that the insertion takes place in one of its children
+		auto internalNode = cast(InternalNode*) node;
+		TreeNode* child = internalNode.children[pos];
+		T* inserted = insert(child, x, create, update, splitNode);
+		if (splitNode == null) return inserted; // child wasn't split
+
+		// if the child was split, we'll move its median element (last of the
+		// left child) into this node and insert the new right child pointer
+		// NOTE: ended up moving the inserted element? adjust returned address
+		T median = move(child.slots[child.slotsInUse - 1]);
+		const bool moveInserted = &child.slots[child.slotsInUse - 1] == inserted;
+		child.slotsInUse = child.slotsInUse - 1;
+		pos = bisect(internalNode.slots[0..internalNode.slotsInUse], median);
+		assert(pos < 0);
+		pos &= ~(1 << 31);
+
+		// which is easy when there's space in this node ...
+		if (internalNode.slotsInUse < nodeSlots) {
+			internalNode.slotsInUse = internalNode.slotsInUse + 1;
+			shift(internalNode.slots[0..internalNode.slotsInUse], pos, median);
+			shift(internalNode.children[0..internalNode.slotsInUse+1], pos+1, splitNode);
+			splitNode = null;
+			return moveInserted ? &internalNode.slots[pos] : inserted;
+		}
+
+		// .. but when there are no slots left, another split is needed at this level
+		auto newNode = new InternalNode();
+		T* splitInsert = split(internalNode, newNode, median, pos, splitNode);
+		splitNode = &newNode.asTreeNode;
+		return moveInserted ? splitInsert : inserted;
+	}
+
 	// easier-to-call overloads for leaf and internal nodes (see template impl below)
-	static T* split(TreeNode* left, TreeNode* right, T x, int pos) {
+	T* split()(TreeNode* left, TreeNode* right, auto ref T x, int pos) {
 		return splitImpl!false(left, right, x, pos, null);
 	}
-	static T* split(InternalNode* left, InternalNode* right, T x, int pos, TreeNode* splitChild) {
-		return splitImpl!true(cast(TreeNode*) left, cast(TreeNode*) right, x, pos, splitChild);
+	T* split()(InternalNode* left, InternalNode* right, auto ref T x, int pos, TreeNode* splitChild) {
+		return splitImpl!true(&left.asTreeNode, &right.asTreeNode, x, pos, splitChild);
 	}
 
 	// split a left node's elements across it and a newly allocated right node,
-	// with a pending insertion of x at index pos in the original (full) node
+	// with a pending insertion of x at index `pos` in the original (full) node
 	pragma(inline)
-	static T* splitImpl(bool isInternal)(
+	T* splitImpl(bool isInternal)(
 		TreeNode* left,
 		TreeNode* right,
-		T x,
+		ref T x,
 		int pos,
 		TreeNode* splitChild
 	)
@@ -259,8 +480,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 			right.slotsInUse = nodeSlots - mid;
 			// then do the insertion on the left node
 			left.slotsInUse = mid - 0 + 1;
-			insertInPlaceDropLast(left.slots[0..left.slotsInUse], pos, move(x));
-			static if (isInternal) insertInPlaceDropLast(leftInternal.children[0..left.slotsInUse+1], pos+1, splitChild);
+			shift(left.slots[0 .. left.slotsInUse], pos, x);
+			static if (isInternal) shift(leftInternal.children[0 .. left.slotsInUse+1], pos+1, splitChild);
 			inserted = &left.slots[pos];
 
 		} else /* if (pos > mid) */ {
@@ -286,84 +507,16 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		}
 
 		// there's one last detail when splitting internal nodes: since this was
-		// a split, we know that the rightmost slot of the left node will be
-		// pushed upwards to its parent, but the child pointer to the right of
-		// that node needs to be put somewhere; that somewhere is precisely the
-		// leftmost slot of the just-created right node, which should be null now
+		// a split, we know that the last slot of the left node will be pushed
+		// upwards to its parent, but the child pointer to the right of that node
+		// needs to be put somewhere; that somewhere is precisely the first
+		// pointer slot of the just-created right node, which should be null now
 		static if (isInternal) {
 			assert(rightInternal.children[0] == null);
 			move(leftInternal.children[left.slotsInUse], rightInternal.children[0]);
 		}
 
 		return inserted;
-	}
-
-	// update an existing element or create a matching one and add it to the tree
-	static T* insert(
-		TreeNode* node,
-		in T x,
-		scope T delegate() create,
-		scope void delegate(ref T) update,
-		out TreeNode* splitNode,
-	)
-	in (node != null && create != null && update != null)
-	{
-		// search this (non-null) node's slots
-		int pos = bisect(node.slots[0 .. node.slotsInUse], x);
-
-		// if found, just return the right address
-		if (pos >= 0) {
-			update(node.slots[pos]);
-			return &node.slots[pos];
-		}
-		pos &= ~(1 << 31);
-
-		// when a leaf is reached and has space, insert right there
-		if (!node.isInternal && node.slotsInUse < nodeSlots) {
-			node.slotsInUse = node.slotsInUse + 1;
-			insertInPlaceDropLast(node.slots[0..node.slotsInUse], pos, create());
-			return &node.slots[pos];
-		}
-
-		// when the leaf has no slots left, we'll split it in two
-		if (!node.isInternal && node.slotsInUse == nodeSlots) {
-			// we'll always create a new right node, but the split is not so
-			// trivial because there's still a pending insertion
-			splitNode = new TreeNode();
-			return split(node, splitNode, create(), pos);
-		}
-
-		// these last cases handle an internal node which doesnt't itself contain
-		// x, so we know that the insertion takes place in one of its children
-		auto internalNode = cast(InternalNode*) node;
-		TreeNode* child = internalNode.children[pos];
-		T* inserted = insert(child, x, create, update, splitNode);
-		if (splitNode == null) return inserted; // child wasn't split
-
-		// if the child was split, we'll move its median element (rightmost of
-		// the left child) into this node and insert the new right child pointer
-		// NOTE: what if we move the inserted element? gotta adjust the returned address
-		T median = move(child.slots[child.slotsInUse - 1]);
-		const bool moveInserted = &child.slots[child.slotsInUse - 1] == inserted;
-		child.slotsInUse = child.slotsInUse - 1;
-		pos = bisect(internalNode.slots[0..internalNode.slotsInUse], median);
-		assert(pos < 0);
-		pos &= ~(1 << 31);
-
-		// which is easy when there's space in this node ...
-		if (internalNode.slotsInUse < nodeSlots) {
-			internalNode.slotsInUse = internalNode.slotsInUse + 1;
-			insertInPlaceDropLast(internalNode.slots[0..internalNode.slotsInUse], pos, move(median));
-			insertInPlaceDropLast(internalNode.children[0..internalNode.slotsInUse+1], pos+1, splitNode);
-			splitNode = null;
-			return moveInserted ? &internalNode.slots[pos] : inserted;
-		}
-
-		// .. but when there are no slots left, another split is needed at this level
-		auto newNode = new InternalNode();
-		T* splitInsert = split(internalNode, newNode, move(median), pos, splitNode);
-		splitNode = cast(TreeNode*) newNode;
-		return moveInserted ? splitInsert : inserted;
 	}
 }
 
@@ -404,18 +557,19 @@ unittest {
 	assert(btree.length == 0);
 	foreach (x; payload) {
 		// at first, the set does not contain x
-		assert(!(x in btree));
+		assert(x !in btree);
+		assert(!btree.remove(x));
 		// insert x and test returned address
 		int* p = btree.upsert(x);
 		assert(*p == x);
-		// now it does contain x
+		// now it does contain x, so test lookup
 		assert(x in btree);
-		// lookup the element and test reference
-		int* q = &(btree[x]);
-		assert(p == q);
-		// should not insert twice (tested using the length checked below)
-		btree.upsert(x);
+		assert(p == btree[x]);
+		// redundant insert is redundant
+		int* q = btree.upsert(x);
+		assert(q == p);
 	}
+
 	assert(btree.length == payload.length);
 	foreach (ref const x; btree) {
 		import eris.set : contains;
@@ -428,6 +582,19 @@ unittest {
 		hashtable[btree] = true;
 		assert(btree in hashtable);
 	}
+
+	for (int n = 1; n + 2 < payload.length; ++n) {
+		auto x = payload[$ - n];
+		assert(x in btree);
+		btree.remove(x);
+		assert(x !in btree);
+		assert(btree.length == payload.length - n);
+	}
+	assert(btree.length == 3);
+
+	btree.clear();
+	assert(btree.length == 0);
+	foreach (x; payload) assert(x !in btree);
 }
 
 }

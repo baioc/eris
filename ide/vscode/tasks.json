@@ -47,6 +47,7 @@
 			"presentation": {
 				"echo": true,
 				"clear": true,
+				"reveal": "silent",
 			},
 		},
 		{
@@ -70,6 +71,7 @@
 			"presentation": {
 				"echo": false,
 				"clear": true,
+				"reveal": "silent",
 			},
 		},
 		{

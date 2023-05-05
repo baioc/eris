@@ -10,6 +10,7 @@
 	"sourcePaths": [],
 	"sourceFiles": [
 		"source/eris/core.d",
+		"source/eris/array.d",
 		"source/eris/btree.d",
 		"source/eris/set.d",
 		"source/eris/package.d",

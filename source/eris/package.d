@@ -6,4 +6,5 @@ I would have called it `deimos`, but that name is [already taken](https://wiki.d
 module eris;
 
 public import eris.core;
+public import eris.array;
 public import eris.set;

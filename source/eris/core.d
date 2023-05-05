@@ -1,4 +1,4 @@
-/// Core type definitions, templates and helper procedures for DasBetterC.
+/// Core type definitions, templates and helper procedures.
 module eris.core;
 
 
@@ -55,28 +55,4 @@ unittest {
 
 	S b  = { length: 1 };
 	assert(!b.empty);
-}
-
-
-/++
-Inserts at a given index in the slice while overwriting its last element.
-
-Moves all elements to the right of the specified index one position forwards,
-therefore overwriting the last element in the slice.
-+/
-void insertInPlaceDropLast(T)(T[] slice, size_t index, T x)
-in (slice.length > 0 && index < slice.length)
-{
-	import std.algorithm.mutation : move;
-	for (long i = slice.length - 1; i > index; --i) {
-		move(slice[i-1], slice[i]);
-	}
-	move(x, slice[index]);
-}
-
-///
-unittest {
-	static int[] a = [ 1, 2, 4, 5 ];
-	a.insertInPlaceDropLast(2, 3);
-	assert(a[0] == 1); assert(a[1] == 2); assert(a[2] == 3); assert(a[3] == 4);
 }

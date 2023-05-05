@@ -256,3 +256,6 @@ version (D_BetterC) {} else {
 		static assert(isIntensionalSet!(Set, T));
 	}
 }
+
+
+// TODO: alias OrderedSet = BTree

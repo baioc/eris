@@ -18,6 +18,7 @@ version (D_Coverage) {} else extern(C) err_t main(int argc, const(stringz)* argv
 err_t unittests() {
 	enum string[] moduleNames = [
 		"eris.core",
+		"eris.array",
 		"eris.btree",
 		"eris.set",
 	];
@@ -79,10 +80,9 @@ err_t benchmarkUpsertReadRemove(string name, string init, string upsert, string 
 				foreach (x; inputs) { mixin(read); }
 				end = clock();
 				break;
-			case 'x': // measure insert+read+remove
-				begin = clock();
+			case 'x': // only measure removals
 				foreach (x; inputs) { mixin(upsert); }
-				foreach (x; inputs) { mixin(read); }
+				begin = clock();
 				foreach (x; inputs) { mixin(remove); }
 				end = clock();
 				break;
@@ -102,9 +102,14 @@ err_t benchmarkAASet(int n, char mode) {
 				alias Unit = void[0];
 				enum unit = Unit.init;
 				Unit[ulong] set;
+				ulong store;
 			},
 			q{ set[x] = unit; },
-			q{ auto b = x in set; },
+			q{
+				import core.volatile : volatileStore;
+				auto b = x in set;
+				volatileStore(&store, cast(ulong) b);
+			},
 			q{ set.remove(x); },
 		)(n, mode);
 	}
@@ -118,9 +123,14 @@ err_t benchmarkRedBlackTree(int n, char mode) {
 			q{
 				import std.container.rbtree;
 				auto set = redBlackTree!ulong();
+				ulong store;
 			},
 			q{ set.insert(x); },
-			q{ auto b = x in set; },
+			q{
+				import core.volatile : volatileStore;
+				auto b = x in set;
+				volatileStore(&store, cast(ulong) b);
+			},
 			q{ set.removeKey(x); },
 		)(n, mode);
 	}
@@ -134,10 +144,15 @@ err_t benchmarkBTree(int n, char mode) {
 			q{
 				import eris.btree;
 				BTree!ulong set;
+				ulong store;
 			},
 			q{ set.upsert(x); },
-			q{ auto p = x in set; },
-			q{ assert(0, "FIXME: implement BTree removal"); },
+			q{
+				import core.volatile : volatileStore;
+				auto b = x in set;
+				volatileStore(&store, cast(ulong) b);
+			},
+			q{ set.remove(x); },
 		)(n, mode);
 	}
 }
