@@ -13,8 +13,9 @@ void shiftRight(T)(T[] slice, size_t n = 1)
 in (n > 0 && slice.length >= n)
 {
 	const long step = n;
-	for (long i = slice.length - 1u; i - step >= 0; --i)
+	for (long i = slice.length - 1u; i - step >= 0; --i) {
 		move(slice[i - step], slice[i]);
+	}
 }
 
 /++
@@ -53,8 +54,9 @@ The first few `n` elements in the slice will get overwritten.
 void shiftLeft(T)(T[] slice, size_t n = 1)
 in (n > 0)
 {
-	for (long i = 0; i + n < slice.length; ++i)
+	for (long i = 0; i + n < slice.length; ++i) {
 		move(slice[i + n], slice[i]);
+	}
 }
 
 unittest {

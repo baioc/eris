@@ -7,4 +7,5 @@ module eris;
 
 public import eris.core;
 public import eris.array;
+public import eris.math;
 public import eris.set;
