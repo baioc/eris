@@ -1,4 +1,4 @@
-/// Generic B-Tree data structure.
+/// Generic B-tree data structure.
 module eris.btree;
 
 import std.typecons : Ternary;
@@ -21,11 +21,11 @@ struct BTreeParameters {
 version (D_BetterC) {} else {
 
 /++
-Single-threaded B-Tree data structure.
+Single-threaded B-tree data structure.
 
-B-Trees are optimized for "cache friendliness" and low memory overhead per stored element.
-The main tradeoff w.r.t other self-balancing trees is that insertions and deletions from a
-B-Tree will move multiple elements around per operation, invalidating references and iterators.
+B-trees are optimized for "cache friendliness" and low memory overhead per stored element.
+The main tradeoff w.r.t other self-balancing trees is that $(B insertions and deletions from a
+B-tree will move multiple elements around per operation, invalidating references and iterators).
 When elements are big, consider storing them through indirect references.
 +/
 struct BTree(T, BTreeParameters params = BTreeParameters.init) {
@@ -74,15 +74,15 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	TreeNode* root = null;
 	size_t totalInUse = 0;
 	static if (params.customCompare) {
-		int delegate(const(void*), const(void*)) opCmp = null;
+		int delegate(ref const(T), ref const(T)) nothrow opCmp = null;
 		invariant(opCmp != null, "custom comparison can't be null");
 	}
 
  public:
- 	static if (params.customCompare) {
+	static if (params.customCompare) {
 		@disable this();
 		/// Constructor taking in a custom ordering function.
-		this(int delegate(const(void*), const(void*)) opCmp) {
+		this(int delegate(ref const(T), ref const(T)) nothrow opCmp) {
 			this.opCmp = opCmp;
 		}
 	}
@@ -95,24 +95,29 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	}
 
 	/// Implements [eris.set.ExtensionalSet.contains]
+	pragma(inline)
 	bool opBinaryRight(string op : "in")(in T x) inout => this[x] != null;
 
 	/// Implements [eris.set.ExtensionalSet.length]
+	pragma(inline)
 	@property size_t length() const => this.totalInUse;
 
-	/// Iterates over elements in order.
-	int opApply(scope int delegate(ref T) dg) => opApply(this.root, dg);
+	/// Iterates over elements in order. NOTE: should not be used while inserting or deleting elements from the tree.
+	pragma(inline)
+	int opApply(scope int delegate(ref T) nothrow dg) => opApply(this.root, dg);
 
 	/// ditto
-	int opApply(scope int delegate(ref const(T)) dg) const {
-		return (cast(BTree) this).opApply(cast(int delegate(ref T)) dg);
+	pragma(inline)
+	int opApply(scope int delegate(ref const(T)) nothrow dg) const {
+		return (cast(BTree) this).opApply(cast(int delegate(ref T) nothrow) dg);
 	}
 
-	/// Implements [eris.set.ExtensionalSet.at]
+	/// Implements [eris.set.ExtensionalSet.at]. NOTE: returned pointer may be invalidated by any insertions or deletions.
+	pragma(inline)
 	inout(T)* opIndex(in T x) inout => search(this.root, x);
 
-	/// Implements [eris.set.MutableSet.upsert]
-	T* upsert(in T x, scope T delegate() create, scope void delegate(ref T) update = null)
+	/// Implements [eris.set.MutableSet.upsert]. NOTE: returned pointer may be invalidated by any following insertions or deletions.
+	T* upsert(in T x, scope T delegate() nothrow create, scope void delegate(ref T) nothrow update = null)
 	in (create != null)
 	out (p; (x in this) == (p != null))
 	{
@@ -143,19 +148,23 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	T* upsert(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
 
 	/// Implements [eris.set.MutableSet.remove]
-	bool remove(in T x, scope void delegate(ref T) destroy = null) {
+	pragma(inline)
+	bool remove(in T x, scope void delegate(ref T) nothrow destroy = null) {
 		if (this.root == null) return false;
 		return searchAndRemove(this.root, x, destroy);
 	}
 
 	/// Element-wise comparison.
-	bool opEquals(BTreeParameters params)(in BTree!(T, params) other) const {
+	pragma(inline)
+	bool opEquals(BTreeParameters P)(ref const(BTree!(T,P)) other) const {
+		if (&this == &other) return true;
 		if (this.length != other.length) return false;
 		foreach (ref const x; this) if (x !in other) return false;
 		return true;
 	}
 
 	/// Combined element hash.
+	pragma(inline)
 	hash_t toHash() const {
 		hash_t hash = 0;
 		foreach (ref const x; this) hash = .hashOf(x, hash);
@@ -184,7 +193,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 			while (end - begin >= 1) {
 				const mid = begin + (end - begin)/2;
 				static if (params.customCompare) {
-					const cmp = this.opCmp(&haystack[mid], &needle);
+					const cmp = this.opCmp(haystack[mid], needle);
 				} else {
 					const cmp = haystack[mid].opCmp(needle);
 				}
@@ -198,7 +207,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 			int i = 0;
 			for (; i < haystack.length; ++i) {
 				static if (params.customCompare) {
-					const cmp = this.opCmp(&haystack[i], &needle);
+					const cmp = this.opCmp(haystack[i], needle);
 				} else {
 					const cmp = haystack[i].opCmp(needle);
 				}
@@ -227,8 +236,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	T* insert(
 		TreeNode* node,
 		in T x,
-		scope T delegate() create,
-		scope void delegate(ref T) update,
+		scope T delegate() nothrow create,
+		scope void delegate(ref T) nothrow update,
 		out TreeNode* splitNode,
 		ref size_t totalInUse
 	)
@@ -246,9 +255,9 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
 		// when a leaf is reached and has space, insert right there
 		if (!node.isInternal && node.slotsInUse < nodeSlots) {
-			node.slotsInUse = node.slotsInUse + 1;
-			totalInUse++;
 			T created = create();
+			totalInUse++;
+			node.slotsInUse = node.slotsInUse + 1;
 			shift(node.slots[0 .. node.slotsInUse], pos, created);
 			return &node.slots[pos];
 		}
@@ -257,9 +266,9 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		if (!node.isInternal && node.slotsInUse == nodeSlots) {
 			// we'll always create a new right node, but the split is not so
 			// trivial because there's still a pending insertion
-			splitNode = new TreeNode();
-			totalInUse++;
 			T created = create();
+			totalInUse++;
+			splitNode = new TreeNode();
 			return split(node, splitNode, created, pos);
 		}
 
@@ -297,14 +306,14 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	}
 
 	// recursively search for an element to delete
-	bool searchAndRemove(TreeNode* node, in T x, scope void delegate(ref T) destroy)
+	bool searchAndRemove(TreeNode* node, in T x, scope void delegate(ref T) nothrow destroy)
 	in (node != null)
 	{
 		// if the element is found at this level, destroy it and clear the slot
 		int pos = bisect(node.slots[0 .. node.slotsInUse], x);
 		if (pos >= 0) {
-			this.totalInUse -= 1;
 			if (destroy != null) destroy(node.slots[pos]);
+			this.totalInUse -= 1;
 			clearSlot(node, pos);
 			return true;
 		}
@@ -446,7 +455,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
  static:
 	// in-order iteration over used slots
-	int opApply(TreeNode* node, scope int delegate(ref T) dg) {
+	int opApply(TreeNode* node, scope int delegate(ref T) nothrow dg) {
 		if (node == null) return 0;
 		const m = node.slotsInUse;
 		if (node.isInternal) {
@@ -556,13 +565,15 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
 
 ///
-unittest {
-	// 2-3 tree
-	enum BTreeParameters params = { nodeSlots: 3 };
-	alias Tree = BTree!(int, params);
-	Tree btree;
-
+nothrow /* TODO: @nogc */ unittest {
 	// tip: debug w/ visualizer at https://www.cs.usfca.edu/~galles/visualization/BTree.html
+	enum BTreeParameters params = {
+		nodeSlots: 3,
+		customCompare: true,
+		useBinarySearch: Ternary.yes,
+	};
+	alias Tree = BTree!(int, params);
+	auto btree = Tree((ref a, ref b) => a - b);
 	static const payload = [
 		34, 33, 38,
 		28, 27, 22,
@@ -586,7 +597,13 @@ unittest {
 		int* q = btree.upsert(x);
 		assert(q == p);
 	}
+
+	// sanity check: the b-tree didn't come up with new elements we didn't insert
 	assert(btree.length == payload.length);
+	foreach (ref const x; btree) {
+		import eris.set : contains;
+		assert(payload.contains(x));
+	}
 
 	// make sure we test the aggregate's opEquals and toHash
 	version (D_BetterC) {} else {

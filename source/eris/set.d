@@ -25,7 +25,7 @@ enum bool isIntensionalSet(S, E) = __traits(compiles, (const(S) s){
 
 version (D_BetterC) {} else {
 	///
-	unittest {
+	nothrow @nogc @safe pure unittest {
 		alias T = const(string);
 		alias Set = IntensionalSet!T;
 		static assert(isIntensionalSet!(Set, T));
@@ -41,7 +41,7 @@ if (isCallable!Callable)
 }
 
 ///
-unittest {
+nothrow @nogc @safe pure unittest {
 	assert( ((int n) => n % 2 == 0).contains(2) );
 	const isEven = (int n) => n % 2 == 0;
 	assert(!isEven.contains(1));
@@ -77,7 +77,7 @@ enum bool isExtensionalSet(S, E) = __traits(compiles, (Unconst!S s, const(S) c){
 
 version (D_BetterC) {} else {
 	///
-	unittest {
+	nothrow @nogc @safe pure unittest {
 		alias T = const(string);
 		alias Set = ExtensionalSet!T;
 		static assert(isExtensionalSet!(Set, T));
@@ -105,7 +105,7 @@ if (is(Iterable == Element[]) || (hasLvalueElements!Iterable && is(ElementType!R
 }
 
 ///
-unittest {
+nothrow @nogc unittest {
 	// slices of type S = const T[], eg:
 	alias T = int;
 	static const T[] array = [ 0, 1, 1, 2, 3, 5, 8, 13 ];
@@ -140,7 +140,7 @@ if (isExtensionalSet!(Set, Element))
 }
 
 ///
-unittest {
+nothrow @nogc unittest {
 	static const notes = [
 		"C", "C#", "Db", "D", "D#", "Eb", "E",
 		"F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"
@@ -248,7 +248,7 @@ enum bool isMutableSet(S, E) = isExtensionalSet!(S, E) && __traits(compiles, (S 
 
 version (D_BetterC) {} else {
 	///
-	unittest {
+	nothrow @nogc @safe pure unittest {
 		alias T = int;
 		alias Set = MutableSet!T;
 		static assert(isMutableSet!(Set, T));

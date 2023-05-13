@@ -9,6 +9,7 @@ Shift all elements in the slice by `n` positions to the right.
 
 The last few `n` elements in the slice will get overwritten.
 +/
+pragma(inline)
 void shiftRight(T)(T[] slice, size_t n = 1)
 in (n > 0 && slice.length >= n)
 {
@@ -34,13 +35,13 @@ void shift(T)(T[] slice, size_t index, auto ref T x) {
 }
 
 ///
-unittest {
+nothrow @nogc @safe unittest {
 	static int[] a = [ 1, 2, 4, 5 ];
 	a.shift(2, 3);
 	assert(a[0] == 1); assert(a[1] == 2); assert(a[2] == 3); assert(a[3] == 4);
 }
 
-unittest {
+nothrow @nogc @safe unittest {
 	static int[] justOne = [ 1 ];
 	justOne.shift(0, -1);
 	assert(justOne[0] == -1);
@@ -51,6 +52,7 @@ Shift all elements in the slice by `n` positions to the left.
 
 The first few `n` elements in the slice will get overwritten.
 +/
+pragma(inline)
 void shiftLeft(T)(T[] slice, size_t n = 1)
 in (n > 0)
 {
@@ -59,7 +61,7 @@ in (n > 0)
 	}
 }
 
-unittest {
+nothrow @nogc @safe unittest {
 	static int[] empty = [];
 	empty.shiftLeft(2); // does nothing
 }
@@ -84,14 +86,14 @@ in (index < slice.length)
 }
 
 ///
-unittest {
+nothrow @nogc @safe unittest {
 	static int[] a = [ 1, 2, 3, 4 ];
 	int three = a.unshift(2);
 	assert(3 == three);
 	assert(a[0] == 1); assert(a[1] == 2); assert(a[2] == 4);
 }
 
-unittest {
+nothrow @nogc @safe unittest {
 	static int[] justOne = [ 1 ];
 	int one = justOne.unshift(0);
 	assert(1 == one);

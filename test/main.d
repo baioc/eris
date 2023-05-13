@@ -12,7 +12,7 @@ version (D_Coverage) {} else extern(C) err_t main(int argc, const(stringz)* argv
 	const(stringz)[] args = argv[0 .. argc];
 	if (argc <= 1 || strcmp(args[1], "unittest") == 0) return runUnittests();
 	else if (strcmp(args[1], "benchmark") == 0)        return doBenchmarks(args[2..$]);
-	return 1;
+	return __LINE__;
 }
 
 err_t runUnittests() {
@@ -33,14 +33,14 @@ err_t runUnittests() {
 }
 
 err_t doBenchmarks(const(stringz[]) args) {
-	if (args.length < 2) return 1;
+	if (args.length < 2) return __LINE__;
 	const type = args[0];
 	import core.stdc.stdlib : atoi;
 	int size = atoi(args[1]);
 	if (strcmp(type, "aaset") == 0)    return benchmarkAASet(size);
 	if (strcmp(type, "redblack") == 0) return benchmarkRedBlackTree(size);
 	if (strcmp(type, "btree") == 0)    return benchmarkBTree(size);
-	return 1;
+	return __LINE__;
 }
 
 Accumulator benchmark(
@@ -79,7 +79,7 @@ void randomize(out String32 output, in int input = rand()) {
 }
 
 err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
-	if (n < 0) return 1;
+	if (n < 0) return __LINE__;
 	const n2 = n * 2;
 
 	import std.meta : AliasSeq;
@@ -87,7 +87,7 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 		import core.stdc.stdlib : srand, calloc, free;
 
 		auto buffer = cast(Element*) calloc(n2, Element.sizeof);
-		if (n2 != 0 && buffer == null) return 1;
+		if (n2 != 0 && buffer == null) return __LINE__;
 		scope(exit) free(buffer);
 
 		Element[] xs = buffer[0 .. n];
@@ -116,7 +116,7 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 			begin = clock();
 			foreach (x; xs) {
 				auto b = x in set;
-				volatileStore(&store, cast(ulong) b);
+				volatileStore(&store, b);
 			}
 			end = clock();
 		});
@@ -128,7 +128,7 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 			begin = clock();
 			foreach (x; xs) {
 				auto b = x in set;
-				volatileStore(&store, cast(ulong) b);
+				volatileStore(&store, b);
 			}
 			end = clock();
 		});

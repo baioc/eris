@@ -51,7 +51,7 @@
 		"unittest-cov": {
 			"buildOptions": ["unittests", "coverage", "debugMode", "debugInfo"],
 			"dflags": ["-main"],
-			"dflags-ldc": ["-main", "--fsanitize=address"],
+			"dflags-ldc": ["-main", "-fsanitize=address"],
 		},
 	},
 }

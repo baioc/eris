@@ -25,7 +25,7 @@ pragma(inline)
 int opCmp(T)(in T a, in T b) if (__traits(isScalar, T)) => cast(int)(a - b);
 
 ///
-unittest {
+nothrow @nogc @safe pure unittest {
 	import std.meta : AliasSeq;
 	static foreach (Scalar; AliasSeq!(char, ubyte, int, size_t, float, double)) {
 		{
@@ -47,7 +47,7 @@ if (is(typeof(arg.length) : size_t) && !__traits(hasMember, T, "empty"))
 => (arg.length == 0);
 
 ///
-unittest {
+nothrow @nogc @safe pure unittest {
 	struct S { size_t length; }
 
 	S a = { length: 0 };
