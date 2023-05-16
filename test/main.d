@@ -65,7 +65,7 @@ struct String32 {
 	alias str this;
 	int opCmp(ref const(String32) other) const {
 		import core.stdc.string : strncmp;
-		return strncmp(this.str.ptr, other.str.ptr, str.length);
+		return strncmp(this.str.ptr, other.str.ptr, str.sizeof);
 	}
 }
 

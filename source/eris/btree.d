@@ -34,14 +34,14 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	import std.algorithm.mutation : move;
 	import eris.core : hash_t;
 
-	// since nodeSlots consist of a contiguous array of Ts, we can choose a
-	// default based on L2 "Streamer" prefetch block size (128 B)
+	// more slots per node mean better locality in leaves, so we probably want a
+	// multiple of cache line size, 256 (-4 for metada) was empirically chosen
 	enum size_t nodeSlots =
-		params.nodeSlots != size_t.max ? params.nodeSlots : max(2, 128 / T.sizeof);
+		params.nodeSlots != size_t.max ? params.nodeSlots : max(2, (256 - 4) / T.sizeof);
 	static assert(nodeSlots >= 2);
 
-	// default bsearch threshold is chosen using double that byte size
-	enum size_t binarySearchThreshold = 256 / T.sizeof;
+	// default bsearch threshold is simply 2x that size
+	enum size_t binarySearchThreshold = max(4, (512 - 4) / T.sizeof);
 	enum bool useBinarySearch =
 		params.useBinarySearch == Ternary.yes
 		|| (params.useBinarySearch == Ternary.unknown && nodeSlots > binarySearchThreshold);
