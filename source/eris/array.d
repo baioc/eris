@@ -1,11 +1,11 @@
-/// In-place manipulation of slices (D's dynamic arrays).
+/// In-place manipulation of slices.
 module eris.array;
 
 import std.algorithm.mutation : move;
 
 
 /++
-Shift all elements in the slice by `n` positions to the right.
+Shift all elements in the slice by `n > 0` positions to the right.
 
 The last few `n` elements in the slice will get overwritten.
 +/
@@ -23,10 +23,10 @@ in (n > 0 && slice.length >= n)
 Inserts at a given index in the slice while dropping its last element.
 
 Basically a macro for
-```
+----
 slice[index .. $].shiftRight(1);
 slice[index] = x;
-```
+----
 +/
 pragma(inline)
 void shift(T)(T[] slice, size_t index, auto ref T x) {
@@ -48,7 +48,7 @@ nothrow @nogc @safe unittest {
 }
 
 /++
-Shift all elements in the slice by `n` positions to the left.
+Shift elements in the slice by `n > 0` positions to the left.
 
 The first few `n` elements in the slice will get overwritten.
 +/
@@ -70,11 +70,11 @@ nothrow @nogc @safe unittest {
 Pops an elemens from a given index in the slice.
 
 Basically a macro for
-```
+----
 T temp = slice[index];
 slice[index .. $].shiftLeft(1);
 return temp;
-```
+----
 +/
 pragma(inline)
 T unshift(T)(T[] slice, size_t index)
@@ -88,8 +88,8 @@ in (index < slice.length)
 ///
 nothrow @nogc @safe unittest {
 	static int[] a = [ 1, 2, 3, 4 ];
-	int three = a.unshift(2);
-	assert(3 == three);
+	int extracted = a.unshift(2);
+	assert(extracted == 3);
 	assert(a[0] == 1); assert(a[1] == 2); assert(a[2] == 4);
 }
 

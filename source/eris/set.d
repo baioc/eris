@@ -1,7 +1,7 @@
 /++
 Interfaces, helpers and some implementations for sets.
 
-Please note that dynamic `interface`s are not defined in -betterC mode,
+Please note that dynamic `interface`s are not defined in betterC mode,
 only their static "concept" counterparts are.
 +/
 module eris.set;
@@ -194,14 +194,19 @@ version (D_BetterC) {} else {
 
 		Params:
 			x = element being looked up in the set
-			destroy = callback to cleanup after the element being removed (if found); only called if not `null`
+			destroy = callback to cleanup after the element being removed (if found); defaults to [object.destroy](https://dlang.org/library/object/destroy.html).
 
 		Returns: Whether or not `x` was contained in the set.
 		+/
 		bool remove(in Element x, scope void delegate(ref Element) destroy = null)
 		out (; !this.contains(x));
 
-		/// Removes all elements from the set.
+
+		/++
+		Removes all elements from the set without necessarily reducing its capacity.
+
+		If elements are structs with a destructor defined, they will all be destroyed.
+		+/
 		void clear()
 		out (; this.length == 0);
 

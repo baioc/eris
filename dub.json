@@ -1,23 +1,11 @@
 {
-	"name": "eris",
+	"name": "bc-eris",
 	"description": "A non-standard library for DasBetterC.",
 	"targetType": "library",
 
 	"license": "proprietary",
 	"copyright": "Copyright © 2023, Gabriel B. Sant'Anna",
 	"authors": ["Gabriel B. Sant'Anna"],
-
-	"sourcePaths": [],
-	"sourceFiles": [
-		"source/eris/core.d",
-		"source/eris/array.d",
-		"source/eris/math.d",
-		"source/eris/btree.d",
-		"source/eris/set.d",
-		"source/eris/package.d",
-	],
-
-	"importPaths": ["source/"],
 
 	"toolchainRequirements": { "frontend": ">=2.101" },
 	"buildRequirements": ["allowWarnings"],

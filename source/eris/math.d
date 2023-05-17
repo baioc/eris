@@ -29,7 +29,7 @@ struct Accumulator {
 	}
 
  const:
-	/// Number of accumulates values.
+	/// Number of accumulated values.
 	@property size_t count() => _count;
 
 	/// Smallest accumulated value.
@@ -58,16 +58,16 @@ struct Accumulator {
 
 ///
 nothrow @nogc @safe unittest {
-	import std.math.operations : isClose;
-
 	static const double[] smallNumbers = [ 4, 7, 13, 16 ];
 	Accumulator small;
 	foreach (x; smallNumbers) small += x;
 
-	static const double[] bigNumbers = [ 1e9 + 4, 1e9 + 7, 1e9 + 13, 1e9 + 16 ];
+	static const double[] bigNumbers = [ // same as smallnumbers + 1e9
+		1.000000004e9, 1.000000007e9, 1.000000013e9, 1.000000016e9 ];
 	Accumulator big;
 	foreach (x; bigNumbers) big += x;
 
+	import std.math.operations : isClose;
 	assert(isClose(small.count, big.count));
 	assert(isClose(small.min + 1e9, big.min));
 	assert(isClose(small.max + 1e9, big.max));

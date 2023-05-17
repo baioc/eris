@@ -87,9 +87,9 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		}
 	}
 
-	/// Empties the tree.
+	/// Implements [eris.set.ExtensionalSet.clear]
 	void clear() {
-		// TODO: update this after implementing destructor = void dispose()
+		// TODO: destroy if hasElaborateDestructor!T
 		this.root = null;
 		this.totalInUse = 0;
 	}
@@ -151,7 +151,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	pragma(inline)
 	bool remove(in T x, scope void delegate(ref T) nothrow destroy = null) {
 		if (this.root == null) return false;
-		return searchAndRemove(this.root, x, destroy);
+		void delegate(ref T) nothrow dg = destroy == null ? (ref x){ .destroy(x); } : destroy;
+		return searchAndRemove(this.root, x, dg);
 	}
 
 	/// Element-wise comparison.
@@ -307,12 +308,12 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
 	// recursively search for an element to delete
 	bool searchAndRemove(TreeNode* node, in T x, scope void delegate(ref T) nothrow destroy)
-	in (node != null)
+	in (node != null && destroy != null)
 	{
 		// if the element is found at this level, destroy it and clear the slot
 		int pos = bisect(node.slots[0 .. node.slotsInUse], x);
 		if (pos >= 0) {
-			if (destroy != null) destroy(node.slots[pos]);
+			destroy(node.slots[pos]);
 			this.totalInUse -= 1;
 			clearSlot(node, pos);
 			return true;
@@ -564,7 +565,6 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 }
 
 
-///
 nothrow /* TODO: @nogc */ unittest {
 	// tip: debug w/ visualizer at https://www.cs.usfca.edu/~galles/visualization/BTree.html
 	enum BTreeParameters params = {
@@ -601,8 +601,8 @@ nothrow /* TODO: @nogc */ unittest {
 	// sanity check: the b-tree didn't come up with new elements we didn't insert
 	assert(btree.length == payload.length);
 	foreach (ref const x; btree) {
-		import eris.set : contains;
-		assert(payload.contains(x));
+		import std.algorithm.searching : canFind;
+		assert(payload.canFind(x));
 	}
 
 	// make sure we test the aggregate's opEquals and toHash

@@ -1,0 +1,16 @@
+strict digraph eris {
+	rankdir="TB";
+
+	core [label="eris.core"];
+
+	array [label="eris.array"];
+
+	math [label="eris.math"];
+
+	btree [label="eris.btree", style="filled", fillcolor="lightgray"];
+	btree -> core;
+	btree -> array;
+
+	set [label="eris.set"];
+	set -> btree;
+}
