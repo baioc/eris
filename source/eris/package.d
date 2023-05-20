@@ -31,7 +31,7 @@ Dependencies_:
 Since I still value my time and sanity, I gave up on trying to partition this library into DUB subpackages.
 So, if you want to use any particular module here without the rest of the project,
 just make sure you carry its dependency subtree along with it.
-Here's a dependency graph (forest) to help with that (gray nodes are not directly exposed at the package level):
+Here's a dependency graph (forest) to help with that (gray nodes aren't `public import`ed in the `eris` module):
 
 ![intra-package dependencies](./deps.svg)
 

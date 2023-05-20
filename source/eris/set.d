@@ -48,6 +48,92 @@ nothrow @nogc @safe pure unittest {
 	static assert(isIntensionalSet!(typeof(isEven), int));
 }
 
+/// Intensional set complement.
+auto setComplement(Element, A)(A a)
+if (isIntensionalSet!(A, const(Element)))
+{
+	struct LazyComplement {
+		A a;
+		bool contains(in Element x) const {
+			return !a.contains(x);
+		}
+	}
+	return LazyComplement(a);
+}
+
+///
+nothrow @nogc @safe pure unittest {
+	const even = (int n) => n % 2 == 0;
+	const odd = setComplement!int(even);
+	foreach (n; 0 .. 100) assert(even.contains(n) != odd.contains(n));
+}
+
+/// Lazy intensional set union.
+auto setUnion(Element, A, B)(A a, B b)
+if (isIntensionalSet!(A, const(Element)) && isIntensionalSet!(B, const(Element)))
+{
+	struct LazyUnion {
+		A a;
+		B b;
+		bool contains(in Element x) const {
+			return a.contains(x) || b.contains(x);
+		}
+	}
+	return LazyUnion(a, b);
+}
+
+///
+nothrow @nogc @safe pure unittest {
+	const small = (int n) => n < 10;
+	const big = (int n) => n >= 10;
+	const any = setUnion!int(small, big);
+	foreach (n; 0 .. 100) assert(any.contains(n));
+}
+
+/// Lazy intensional set intersection.
+auto setIntersection(Element, A, B)(A a, B b)
+if (isIntensionalSet!(A, const(Element)) && isIntensionalSet!(B, const(Element)))
+{
+	struct LazyIntersection {
+		A a;
+		B b;
+		bool contains(in Element x) const {
+			return a.contains(x) && b.contains(x);
+		}
+	}
+	return LazyIntersection(a, b);
+}
+
+///
+nothrow @nogc @safe pure unittest {
+	const from08to66 = (int n) => n >=  8 && n < 66;
+	const from42to99 = (int n) => n >= 42 && n < 99;
+	const result = setIntersection!int(from08to66, from42to99);
+	foreach (n; 0 .. 100) assert(result.contains(n) == (n >= 42 && n < 66));
+}
+
+/// Lazy intensional set difference.
+auto setDifference(Element, A, B)(A a, B b)
+if (isIntensionalSet!(A, const(Element)) && isIntensionalSet!(B, const(Element)))
+{
+	struct LazyDifference {
+		A a;
+		B b;
+		bool contains(in Element x) const {
+			return a.contains(x) && !b.contains(x);
+		}
+	}
+	return LazyDifference(a, b);
+}
+
+///
+nothrow @nogc @safe pure unittest {
+	const from08to66 = (int n) => n >=  8 && n < 66;
+	const from42to99 = (int n) => n >= 42 && n < 99;
+	const result = setDifference!int(from08to66, from42to99);
+	foreach (n; 0 .. 100) assert(result.contains(n) == (n >= 8 && n < 42));
+}
+
 
 version (D_BetterC) {} else {
 	/// A generic interface for finite sets.
