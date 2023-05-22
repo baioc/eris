@@ -1,25 +1,22 @@
-/++
-Interfaces, helpers and some implementations for sets.
-
-Please note that dynamic `interface`s are not defined in betterC mode,
-only their static "concept" counterparts are.
-+/
+/// Static interfaces, helpers and some implementations for sets.
 module eris.set;
 
-import std.traits : isCallable, Unconst;
-import std.range.primitives : hasLvalueElements, ElementType;
+import std.traits : isCallable;
+
+import eris.container : isIterable, ElementType;
 
 
 version (D_BetterC) {} else {
 	/// Simplest interface for [intensionally-defined sets](https://en.wikipedia.org/wiki/Extensional_and_intensional_definitions).
-	interface IntensionalSet(Element) {
+	interface Set(Element) {
+	 nothrow @nogc:
 		/// Tests whether an element belongs to the set.
 		bool contains(in Element x) const;
 	}
 }
 
-/// Tests whether a type `S` can be used as a set over elements of type `E`; the static counterpart of [IntensionalSet].
-enum bool isIntensionalSet(S, E) = __traits(compiles, (const(S) s){
+/// Tests whether a type `S` can be used as a set over elements of type `E`; the static counterpart of [Set].
+enum bool isSet(S, E) = __traits(compiles, (const(S) s){
 	bool b = s.contains(E.init);
 });
 
@@ -27,8 +24,7 @@ version (D_BetterC) {} else {
 	///
 	nothrow @nogc @safe pure unittest {
 		alias T = const(string);
-		alias Set = IntensionalSet!T;
-		static assert(isIntensionalSet!(Set, T));
+		static assert(isSet!(Set!T, T));
 	}
 }
 
@@ -45,18 +41,16 @@ nothrow @nogc @safe pure unittest {
 	assert( ((int n) => n % 2 == 0).contains(2) );
 	const isEven = (int n) => n % 2 == 0;
 	assert(!isEven.contains(1));
-	static assert(isIntensionalSet!(typeof(isEven), int));
+	static assert(isSet!(typeof(isEven), int));
 }
 
 /// Intensional set complement.
 auto setComplement(Element, A)(A a)
-if (isIntensionalSet!(A, const(Element)))
+if (isSet!(A, const(Element)))
 {
 	struct LazyComplement {
-		A a;
-		bool contains(in Element x) const {
-			return !a.contains(x);
-		}
+		private A a;
+		public bool contains(in Element x) const => !a.contains(x);
 	}
 	return LazyComplement(a);
 }
@@ -70,14 +64,12 @@ nothrow @nogc @safe pure unittest {
 
 /// Lazy intensional set union.
 auto setUnion(Element, A, B)(A a, B b)
-if (isIntensionalSet!(A, const(Element)) && isIntensionalSet!(B, const(Element)))
+if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 {
 	struct LazyUnion {
-		A a;
-		B b;
-		bool contains(in Element x) const {
-			return a.contains(x) || b.contains(x);
-		}
+		private A a;
+		private B b;
+		public bool contains(in Element x) const => a.contains(x) || b.contains(x);
 	}
 	return LazyUnion(a, b);
 }
@@ -92,14 +84,12 @@ nothrow @nogc @safe pure unittest {
 
 /// Lazy intensional set intersection.
 auto setIntersection(Element, A, B)(A a, B b)
-if (isIntensionalSet!(A, const(Element)) && isIntensionalSet!(B, const(Element)))
+if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 {
 	struct LazyIntersection {
-		A a;
-		B b;
-		bool contains(in Element x) const {
-			return a.contains(x) && b.contains(x);
-		}
+		private A a;
+		private B b;
+		public bool contains(in Element x) const => a.contains(x) && b.contains(x);
 	}
 	return LazyIntersection(a, b);
 }
@@ -114,14 +104,12 @@ nothrow @nogc @safe pure unittest {
 
 /// Lazy intensional set difference.
 auto setDifference(Element, A, B)(A a, B b)
-if (isIntensionalSet!(A, const(Element)) && isIntensionalSet!(B, const(Element)))
+if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 {
 	struct LazyDifference {
-		A a;
-		B b;
-		bool contains(in Element x) const {
-			return a.contains(x) && !b.contains(x);
-		}
+		private A a;
+		private B b;
+		public bool contains(in Element x) const => a.contains(x) && !b.contains(x);
 	}
 	return LazyDifference(a, b);
 }
@@ -136,54 +124,61 @@ nothrow @nogc @safe pure unittest {
 
 
 version (D_BetterC) {} else {
+	import eris.container : Iterable;
+
 	/// A generic interface for finite sets.
-	interface ExtensionalSet(Element) : IntensionalSet!Element {
+	interface ExtensionalSet(Element) : Set!Element, Iterable!Element {
+	 nothrow @nogc:
 		/// Query the number of elements in the set.
 		size_t length() const;
 
 		/// Get the address of a matching element, or `null` if it isn't in the set.
 		inout(Element)* at(in Element x) inout;
-
-		/// Iterate over elements in the set using `foreach`.
-		int opApply(scope int delegate(ref Element) dg)
-		in (dg != null);
-
-		/// ditto
-		int opApply(scope int delegate(ref const(Element)) dg) const
-		in (dg != null);
 	}
 }
 
 /// Static interface counterpart of [ExtensionalSet].
-enum bool isExtensionalSet(S, E) = __traits(compiles, (Unconst!S s, const(S) c){
-	size_t size = s.length;
-	foreach (ref E x;        s) E* p        = s.at(x);
-	foreach (ref const(E) x; c) const(E)* q = c.at(x);
-});
+enum bool isExtensionalSet(S, E) = (
+	isIterable!(S, E) && __traits(compiles, (S s, const(S) c, const(E) x) nothrow @nogc {
+		size_t size = s.length;
+		E* p = s.at(x);
+		const(E)* q = c.at(x);
+	})
+);
+
+/// ditto
+template isExtensionalSet(S) {
+	static if (__traits(compiles, ElementType!S)) {
+		enum isExtensionalSet = isExtensionalSet!(S, ElementType!S);
+	} else {
+		enum isExtensionalSet = false;
+	}
+}
 
 version (D_BetterC) {} else {
 	///
 	nothrow @nogc @safe pure unittest {
-		alias T = const(string);
-		alias Set = ExtensionalSet!T;
-		static assert(isExtensionalSet!(Set, T));
-		static assert(isIntensionalSet!(Set, T));
+		import std.meta : AliasSeq;
+		static foreach (T; AliasSeq!(int, const(string))) {{
+			alias Set = ExtensionalSet!T;
+			static assert(isExtensionalSet!Set);
+			static assert(isExtensionalSet!(Set, T));
+			static assert(isSet!(Set, T));
+		}}
 	}
 }
 
 /// Gives an intensional interpretation to all extensional sets by defining `contains` in terms of `at`.
 pragma(inline)
-bool contains(Set, Element)(in Set s, in Element x)
-if (isExtensionalSet!(const(Set), const(Element)))
+bool contains(Set, T)(in Set s, in T x)
+if (isExtensionalSet!Set && is(T : const(ElementType!Set)))
 {
 	return s.at(x) != null;
 }
 
-/// Defines an extensional set's `at` for iterables whose elements can have their address taken (includes slices). O(n).
+/// Defines an extensional set's `at` for slices. O(n).
 pragma(inline)
-inout(Element)* at(Iterable, Element)(inout(Iterable) haystack, in Element needle)
-if (is(Iterable == Element[]) || (hasLvalueElements!Iterable && is(ElementType!R == Element)))
-{
+inout(Element)* at(Element)(inout(Element[]) haystack, in Element needle) {
 	foreach (ref inout x; haystack) {
 		if (x == needle) return &x;
 	}
@@ -200,13 +195,14 @@ nothrow @nogc unittest {
 	// can be seen as extensional sets over const(T):
 	const(int)* p = array.at(5);
 	assert(*p == 5);
+	static assert(isExtensionalSet!S);
 	static assert(isExtensionalSet!(S, const(T)));
 
 	// but as intensional sets, they can also range over (non-const) T:
 	assert(array.contains(1));
 	assert(!array.contains(4));
-	static assert(isIntensionalSet!(S, T));
-	static assert(isIntensionalSet!(S, const(T)));
+	static assert(isSet!(S, T));
+	static assert(isSet!(S, const(T)));
 }
 
 /++
@@ -245,6 +241,7 @@ version (D_BetterC) {} else {
 	insertion capabilities, as well as some control over preallocation.
 	+/
 	interface MutableSet(Element) : ExtensionalSet!Element {
+	 nothrow @nogc:
 		/++
 		Updates an element already in the set or creates a new one therein.
 
@@ -258,7 +255,11 @@ version (D_BetterC) {} else {
 			This value is only `null` if the element would have been inserted but
 			the operation didn't succeed (e.g. because of a memory allocation failure).
 		+/
-		Element* upsert(in Element x, scope Element delegate() create, scope void delegate(ref Element) update = null)
+		Element* upsert(
+			in Element x,
+			scope Element delegate() nothrow @nogc create,
+			scope void delegate(ref Element) nothrow @nogc update = null
+		)
 		in (create != null)
 		out (p; this.contains(x) == (p != null));
 
@@ -280,11 +281,12 @@ version (D_BetterC) {} else {
 
 		Params:
 			x = element being looked up in the set
-			destroy = callback to cleanup after the element being removed (if found); defaults to [object.destroy](https://dlang.org/library/object/destroy.html).
+			destroy = callback to cleanup after the element being removed (if found);
+				defaults to [object.destroy](https://dlang.org/library/object/destroy.html).
 
 		Returns: Whether or not `x` was contained in the set.
 		+/
-		bool remove(in Element x, scope void delegate(ref Element) destroy = null)
+		bool remove(in Element x, scope void delegate(ref Element) nothrow @nogc destroy = null)
 		out (; !this.contains(x));
 
 
@@ -326,7 +328,7 @@ version (D_BetterC) {} else {
 }
 
 /// Static interface counterpart of [MutableSet].
-enum bool isMutableSet(S, E) = isExtensionalSet!(S, E) && __traits(compiles, (S s, E x){
+enum bool isMutableSet(S, E) = isExtensionalSet!(S, E) && __traits(compiles, (S s, E x) nothrow @nogc {
 	size_t reserved = s.capacity;
 	size_t newCapacity = s.reserve(reserved << 1);
 	E* p = s.upsert(x);
@@ -337,16 +339,29 @@ enum bool isMutableSet(S, E) = isExtensionalSet!(S, E) && __traits(compiles, (S 
 	s.clear();
 });
 
-version (D_BetterC) {} else {
-	///
-	nothrow @nogc @safe pure unittest {
-		alias T = int;
-		alias Set = MutableSet!T;
-		static assert(isMutableSet!(Set, T));
-		static assert(isExtensionalSet!(Set, T));
-		static assert(isIntensionalSet!(Set, T));
+/// ditto
+template isMutableSet(S) {
+	static if (__traits(compiles, ElementType!S)) {
+		enum isMutableSet = isMutableSet!(S, ElementType!S);
+	} else {
+		enum isMutableSet = false;
 	}
 }
 
+version (D_BetterC) {} else {
+	///
+	nothrow @nogc @safe pure unittest {
+		import std.meta : AliasSeq;
+		static foreach (T; AliasSeq!(int, string)) {{
+			alias Set = MutableSet!T;
+			static assert(isMutableSet!Set);
+			static assert(isMutableSet!(Set, T));
+			static assert(isExtensionalSet!Set);
+			static assert(isExtensionalSet!(Set, T));
+			static assert(isSet!(Set, T));
+		}}
+	}
+}
 
-// TODO: alias OrderedSet = BTree
+// TODO: struct OrderedSet { BTree + MutableSet interface }
+// TODO: destructible { unite, intersect, subtract } on (ref MutableSet * in ExtensionalSet)

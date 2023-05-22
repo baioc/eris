@@ -28,32 +28,32 @@ struct Accumulator {
 		_m2 += delta * delta2;
 	}
 
- const:
+ const @property:
 	/// Number of accumulated values.
-	@property size_t count() => _count;
+	size_t count() => _count;
 
 	/// Smallest accumulated value.
-	@property double min() => _min;
+	double min() => _min;
 
 	/// Biggest accumulated value.
-	@property double max() => _max;
+	double max() => _max;
 
 	/// Average accumulated value.
-	@property double mean() => _mean;
+	double mean() => _mean;
 
 	/// Population variance.
-	@property double variance() => count > 0 ? _m2 / _count : double.init;
+	double variance() => count > 0 ? _m2 / _count : double.init;
 
 	/// Sample variance.
-	@property double var() => count > 1 ? _m2 / (_count - 1) : double.init;
+	double var() => count > 1 ? _m2 / (_count - 1) : double.init;
 
 	private import core.math : sqrt;
 
 	/// Population standard deviation.
-	@property double standardDeviation() => sqrt(this.variance);
+	double standardDeviation() => sqrt(this.variance);
 
 	/// Sample standard deviation.
-	@property double std() => sqrt(this.var);
+	double std() => sqrt(this.var);
 }
 
 ///

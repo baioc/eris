@@ -12,7 +12,7 @@ alias stringz = char*;
 /++
 Error code signaling; zero is success.
 
-Rationale: Compatible with C (and with D's `opApply` delegate parameter).
+Rationale: Compatible with C practice (and with D's `opApply` delegate parameter).
 +/
 alias err_t = int;
 
@@ -44,22 +44,4 @@ nothrow @nogc @safe pure unittest {
 nothrow @nogc @safe pure unittest {
 	assert( uint.max.opCmp(1) > 0 );
 	assert(  int.min.opCmp(2) < 0 );
-}
-
-
-/// Free-function `empty`, which does the expected whenever `arg.length` works.
-pragma(inline)
-bool empty(T)(in T arg)
-if (is(typeof(arg.length) : size_t) && !__traits(hasMember, T, "empty"))
-=> (arg.length == 0);
-
-///
-nothrow @nogc @safe pure unittest {
-	struct S { size_t length; }
-
-	S a = { length: 0 };
-	assert(a.empty);
-
-	S b  = { length: 1 };
-	assert(!b.empty);
 }

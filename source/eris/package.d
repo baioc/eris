@@ -36,6 +36,15 @@ Here's a dependency graph (forest) to help with that (gray nodes aren't `public 
 ![intra-package dependencies](./deps.svg)
 
 
+Note_:
+
+$(LIST
+	* D `interface`s showing up in the docs are only there to document static interfaces;
+	this is a betterC library and procedures assume all containers are `struct`s,
+	so classes probably won't work in most cases.
+)
+
+
 Link_References:
 	1 = [#note-1]
 +/
@@ -44,4 +53,5 @@ module eris;
 public import eris.core;
 public import eris.array;
 public import eris.math;
+public import eris.container;
 public import eris.set;

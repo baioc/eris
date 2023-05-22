@@ -96,7 +96,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
 	/// Implements [eris.set.ExtensionalSet.contains]
 	pragma(inline)
-	bool opBinaryRight(string op : "in")(in T x) inout => this[x] != null;
+	bool opBinaryRight(string op : "in")(in T x) const => this[x] != null;
 
 	/// Implements [eris.set.ExtensionalSet.length]
 	pragma(inline)
@@ -158,7 +158,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	/// Element-wise comparison.
 	pragma(inline)
 	bool opEquals(BTreeParameters P)(ref const(BTree!(T,P)) other) const {
-		if (&this == &other) return true;
+		if (&this == cast(typeof(&this)) &other) return true;
 		if (this.length != other.length) return false;
 		foreach (ref const x; this) if (x !in other) return false;
 		return true;
@@ -565,6 +565,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 }
 
 
+///
 nothrow /* TODO: @nogc */ unittest {
 	// tip: debug w/ visualizer at https://www.cs.usfca.edu/~galles/visualization/BTree.html
 	enum BTreeParameters params = {
@@ -572,8 +573,7 @@ nothrow /* TODO: @nogc */ unittest {
 		customCompare: true,
 		useBinarySearch: Ternary.yes,
 	};
-	alias Tree = BTree!(int, params);
-	auto btree = Tree((ref a, ref b) => a - b);
+	auto btree = BTree!(int, params)((ref a, ref b) => a - b);
 	static const payload = [
 		34, 33, 38,
 		28, 27, 22,
@@ -605,14 +605,6 @@ nothrow /* TODO: @nogc */ unittest {
 		assert(payload.canFind(x));
 	}
 
-	// make sure we test the aggregate's opEquals and toHash
-	version (D_BetterC) {} else {
-		bool[Tree] hashtable;
-		assert(!(btree in hashtable));
-		hashtable[btree] = true;
-		assert(btree in hashtable);
-	}
-
 	// remove all but the last 3 elements in reverse order
 	for (int n = 1; n + 2 < payload.length; ++n) {
 		auto x = payload[$ - n];
@@ -622,6 +614,12 @@ nothrow /* TODO: @nogc */ unittest {
 		assert(btree.length == payload.length - n);
 	}
 	assert(btree.length == 3);
+
+	// make sure we test the aggregate equality
+	auto other = BTree!int();
+	assert(btree != other);
+	other.upsert(33); other.upsert(34); other.upsert(38);
+	assert(btree == other);
 
 	// clear gets rid of the rest
 	btree.clear();

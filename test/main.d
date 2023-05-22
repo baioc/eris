@@ -20,6 +20,7 @@ err_t runUnittests() {
 		"eris.core",
 		"eris.array",
 		"eris.math",
+		"eris.container",
 		"eris.btree",
 		"eris.set",
 	];

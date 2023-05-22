@@ -7,10 +7,13 @@ strict digraph eris {
 
 	math [label="eris.math"];
 
+	container [label="eris.container"];
+
 	btree [label="eris.btree", style="filled", fillcolor="lightgray"];
 	btree -> core;
 	btree -> array;
 
 	set [label="eris.set"];
+	set -> container;
 	set -> btree;
 }
