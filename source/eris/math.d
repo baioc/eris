@@ -28,6 +28,9 @@ struct Accumulator {
 		_m2 += delta * delta2;
 	}
 
+	/// ditto
+	alias put = opOpAssign!"+";
+
  const @property:
 	/// Number of accumulated values.
 	size_t count() => _count;
@@ -58,22 +61,25 @@ struct Accumulator {
 
 ///
 nothrow @nogc @safe unittest {
+	import std.range.primitives : put, isOutputRange;
+	import std.math.operations : isClose;
+
+	Accumulator small, big;
+	static assert(isOutputRange!(Accumulator, double));
+
 	static const double[] smallNumbers = [ 4, 7, 13, 16 ];
-	Accumulator small;
-	foreach (x; smallNumbers) small += x;
+	put(small, smallNumbers);
 
 	static const double[] bigNumbers = [ // same as smallnumbers + 1e9
 		1.000000004e9, 1.000000007e9, 1.000000013e9, 1.000000016e9 ];
-	Accumulator big;
-	foreach (x; bigNumbers) big += x;
+	put(big, bigNumbers);
 
-	import std.math.operations : isClose;
-	assert(isClose(small.count, big.count));
-	assert(isClose(small.min + 1e9, big.min));
-	assert(isClose(small.max + 1e9, big.max));
-	assert(isClose(small.mean + 1e9, big.mean));
-	assert(isClose(small.var, big.var));
-	assert(isClose(small.variance, big.variance));
-	assert(isClose(small.std, big.std));
+	assert(isClose(small.count,             big.count            ));
+	assert(isClose(small.min  + 1e9,        big.min              ));
+	assert(isClose(small.max  + 1e9,        big.max              ));
+	assert(isClose(small.mean + 1e9,        big.mean             ));
+	assert(isClose(small.var,               big.var              ));
+	assert(isClose(small.variance,          big.variance         ));
+	assert(isClose(small.std,               big.std              ));
 	assert(isClose(small.standardDeviation, big.standardDeviation));
 }

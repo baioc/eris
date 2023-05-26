@@ -188,7 +188,13 @@ err_t benchmarkRedBlackTree(int n) {
 	}
 }
 
-import eris.btree;
+struct BTree(T) {
+	import eris.btree;
+	eris.btree.BTree!T btree;
+	void upsert(T x) { btree.put(x); }
+	bool opBinaryRight(string op : "in")(in T x) const => x in btree;
+	void remove(in T x) { btree.remove(x); }
+}
 
 err_t benchmarkBTree(int n) {
 	version (D_BetterC) {

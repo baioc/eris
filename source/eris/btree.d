@@ -143,9 +143,9 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		return moveInserted ? &newRoot.slots[0] : inserted;
 	}
 
-	/// ditto
+	/// Implements [eris.set.MutableSet.put]. NOTE: returned pointer may be invalidated by any following insertions or deletions.
 	pragma(inline)
-	T* upsert(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
+	T* put(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
 
 	/// Implements [eris.set.MutableSet.remove]
 	pragma(inline)
@@ -588,13 +588,13 @@ nothrow /* TODO: @nogc */ unittest {
 		assert(x !in btree);
 		assert(!btree.remove(x));
 		// insert x and test returned address
-		int* p = btree.upsert(x);
+		int* p = btree.put(x);
 		assert(*p == x);
 		// now it does contain x, so test lookup
 		assert(x in btree);
 		assert(p == btree[x]);
 		// redundant insert is redundant
-		int* q = btree.upsert(x);
+		int* q = btree.put(x);
 		assert(q == p);
 	}
 
@@ -618,7 +618,9 @@ nothrow /* TODO: @nogc */ unittest {
 	// make sure we test the aggregate equality
 	auto other = BTree!int();
 	assert(btree != other);
-	other.upsert(33); other.upsert(34); other.upsert(38);
+	import std.range.primitives : put;
+	static const remaining = [33, 34, 38];
+	put(other, remaining);
 	assert(btree == other);
 
 	// clear gets rid of the rest

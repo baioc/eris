@@ -161,9 +161,10 @@ version (D_BetterC) {} else {
 		import std.meta : AliasSeq;
 		static foreach (T; AliasSeq!(int, const(string))) {{
 			alias Set = ExtensionalSet!T;
-			static assert(isExtensionalSet!Set);
-			static assert(isExtensionalSet!(Set, T));
-			static assert(isSet!(Set, T));
+			static assert( isExtensionalSet!Set      );
+			static assert( isExtensionalSet!(Set, T) );
+			// isExtensionalSet implies isSet
+			static assert( isSet!(Set, T)            );
 		}}
 	}
 }
@@ -264,7 +265,7 @@ version (D_BetterC) {} else {
 		out (p; this.contains(x) == (p != null));
 
 		/++
-		Simpler upsert in which value being looked up is also copied into the set.
+		Simpler upsert in which the value being looked up is also copied into the set.
 
 		Params:
 			x = an element which is used to look up an entry in the set;
@@ -273,7 +274,7 @@ version (D_BetterC) {} else {
 
 		Returns: A pointer to the element currently stored in the set, or `null` in case of insertion failure.
 		+/
-		Element* upsert(Element x)
+		Element* put(Element x)
 		out (p; this.contains(x) == (p != null));
 
 		/++
@@ -331,7 +332,7 @@ version (D_BetterC) {} else {
 enum bool isMutableSet(S, E) = isExtensionalSet!(S, E) && __traits(compiles, (S s, E x) nothrow @nogc {
 	size_t reserved = s.capacity;
 	size_t newCapacity = s.reserve(reserved << 1);
-	E* p = s.upsert(x);
+	E* p = s.put(x);
 	E* q = s.upsert(x, () => x);
 	E* r = s.upsert(x, () => x, (ref old){ old = x; });
 	bool maybe = s.remove(x, (ref e){ .destroy(e); });
@@ -352,16 +353,20 @@ version (D_BetterC) {} else {
 	///
 	nothrow @nogc @safe pure unittest {
 		import std.meta : AliasSeq;
+		import std.range.primitives : isOutputRange;
 		static foreach (T; AliasSeq!(int, string)) {{
 			alias Set = MutableSet!T;
-			static assert(isMutableSet!Set);
-			static assert(isMutableSet!(Set, T));
-			static assert(isExtensionalSet!Set);
-			static assert(isExtensionalSet!(Set, T));
-			static assert(isSet!(Set, T));
+			static assert( isMutableSet!Set          );
+			static assert( isMutableSet!(Set, T)     );
+			// isMutableSet implies isExtensionalSet implies isSet
+			static assert( isExtensionalSet!Set      );
+			static assert( isExtensionalSet!(Set, T) );
+			static assert( isSet!(Set, T)            );
+			// isMutableSet implies isOutputRange
+			static assert( isOutputRange!(Set, T)    );
 		}}
 	}
 }
 
 // TODO: struct OrderedSet { BTree + MutableSet interface }
-// TODO: destructible { unite, intersect, subtract } on (ref MutableSet * in ExtensionalSet)
+// TODO: destructible { unite, intersect, subtract } on (ref MutableSet * iterable [+hasLength])
