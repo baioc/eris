@@ -15,7 +15,7 @@ $(NUMBERED_LIST
 )
 
 Rationale for the first point is that it allows C developers to use D-generated code in their apps and libraries,
-even if that usually requires some explicit template instantations and manual symbol mangling directives.
+even if that may require some explicit template instantations, manual symbol mangling directives and `extern(C)`.
 The other goals constitute reasons for wanting to use this library in C or D codebases in the first place.
 
 $(DIV $(ID note-1)

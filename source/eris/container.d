@@ -17,18 +17,19 @@ version (D_BetterC) {} else {
 }
 
 /// Tests whether a type `I` can be used to iterate over elements of type `T`; the static counterpart of [Iterable].
-enum bool isIterable(I, T) = __traits(compiles, (I it, const(I) cit) nothrow @nogc {
-	foreach (ref T x; it) {}
-	foreach (ref const(T) x; cit) {}
-});
+template isIterable(I, T) {
+	enum bool isIterable = __traits(compiles, (I it, const(I) cit) nothrow @nogc {
+		foreach (ref T x; it) {}
+		foreach (ref const(T) x; cit) {}
+	});
+}
 
 /// ditto
 template isIterable(I) {
-	static if (__traits(compiles, ElementType!I)) {
-		enum isIterable = isIterable!(I, ElementType!I);
-	} else {
-		enum isIterable = false;
-	}
+	static if (__traits(compiles, ElementType!I))
+		enum bool isIterable = isIterable!(I, ElementType!I);
+	else
+		enum bool isIterable = false;
 }
 
 ///
@@ -62,7 +63,9 @@ nothrow @nogc unittest {
 }
 
 /// The element type which is iterated upon by the given [Iterable].
-alias ElementType(Iterable) = typeof((){ Iterable it; return it.front; }());
+template ElementType(Iterable) {
+	alias ElementType = typeof((){ Iterable it; return it.front; }());
+}
 
 ///
 nothrow @nogc @safe pure unittest {

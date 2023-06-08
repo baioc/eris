@@ -48,7 +48,7 @@ nothrow @nogc @safe pure unittest {
 auto setComplement(Element, A)(A a)
 if (isSet!(A, const(Element)))
 {
-	struct LazyComplement {
+	static struct LazyComplement {
 		private A a;
 		public bool contains(in Element x) const => !a.contains(x);
 	}
@@ -66,7 +66,7 @@ nothrow @nogc @safe pure unittest {
 auto setUnion(Element, A, B)(A a, B b)
 if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 {
-	struct LazyUnion {
+	static struct LazyUnion {
 		private A a;
 		private B b;
 		public bool contains(in Element x) const => a.contains(x) || b.contains(x);
@@ -86,7 +86,7 @@ nothrow @nogc @safe pure unittest {
 auto setIntersection(Element, A, B)(A a, B b)
 if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 {
-	struct LazyIntersection {
+	static struct LazyIntersection {
 		private A a;
 		private B b;
 		public bool contains(in Element x) const => a.contains(x) && b.contains(x);
@@ -106,7 +106,7 @@ nothrow @nogc @safe pure unittest {
 auto setDifference(Element, A, B)(A a, B b)
 if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 {
-	struct LazyDifference {
+	static struct LazyDifference {
 		private A a;
 		private B b;
 		public bool contains(in Element x) const => a.contains(x) && !b.contains(x);
@@ -362,7 +362,7 @@ version (D_BetterC) {} else {
 			static assert( isExtensionalSet!Set      );
 			static assert( isExtensionalSet!(Set, T) );
 			static assert( isSet!(Set, T)            );
-			// isMutableSet implies isOutputRange
+			// isMutableSet also implies isOutputRange
 			static assert( isOutputRange!(Set, T)    );
 		}}
 	}

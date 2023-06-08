@@ -95,7 +95,7 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "ldmd2 -wi -preview=fieldwise -release -O -g -noboundscheck -Isource/ -i test/main.d -ofbc-eris-test-library",
+			"command": "ldmd2 -preview=fieldwise -release -O -g -I source/ -i test/main.d -of bc-eris-test-library",
 			"presentation": {
 				"echo": true,
 				"clear": true,
@@ -108,7 +108,7 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "ldmd2 -wi -preview=fieldwise -release -O -g -noboundscheck -Isource/ -i test/main.d -vasm && rm main main.o; ddemangle main.s > bc-eris-test-library.s",
+			"command": "ldmd2 -preview=fieldwise -release -O -g -I source/ -i test/main.d -vasm && rm main main.o; ddemangle main.s > bc-eris-test-library.s",
 			"presentation": {
 				"echo": true,
 				"clear": true,

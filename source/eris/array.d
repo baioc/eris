@@ -8,6 +8,8 @@ import std.algorithm.mutation : move;
 Shift all elements in the slice by `n > 0` positions to the right.
 
 The last few `n` elements in the slice will get overwritten.
+
+See_Also: [shift]
 +/
 pragma(inline)
 void shiftRight(T)(T[] slice, size_t n = 1)
@@ -51,6 +53,8 @@ nothrow @nogc @safe unittest {
 Shift elements in the slice by `n > 0` positions to the left.
 
 The first few `n` elements in the slice will get overwritten.
+
+See_Also: [unshift]
 +/
 pragma(inline)
 void shiftLeft(T)(T[] slice, size_t n = 1)

@@ -87,7 +87,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		}
 	}
 
-	/// Implements [eris.set.ExtensionalSet.clear]
+	/// Implements [eris.set.MutableSet.clear]
 	void clear() {
 		// TODO: destroy if hasElaborateDestructor!T
 		this.root = null;
@@ -196,7 +196,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 				static if (params.customCompare) {
 					const cmp = this.opCmp(haystack[mid], needle);
 				} else {
-					const cmp = haystack[mid].opCmp(needle);
+					const cmp = opCmp(haystack[mid], needle);
 				}
 				if (cmp < 0) begin = mid + 1;
 				else if (cmp == 0) return mid;
@@ -210,7 +210,7 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 				static if (params.customCompare) {
 					const cmp = this.opCmp(haystack[i], needle);
 				} else {
-					const cmp = haystack[i].opCmp(needle);
+					const cmp = opCmp(haystack[i], needle);
 				}
 				if (cmp < 0) continue;
 				if (cmp == 0) return i;
@@ -615,7 +615,7 @@ nothrow /* TODO: @nogc */ unittest {
 	}
 	assert(btree.length == 3);
 
-	// make sure we test the aggregate equality
+	// make sure we test aggregate equality
 	auto other = BTree!int();
 	assert(btree != other);
 	import std.range.primitives : put;

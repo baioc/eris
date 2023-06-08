@@ -95,10 +95,10 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 		Element[] xs2 = buffer[0 .. n2];
 		srand(seed);
 		Accumulator benchmarkRandomized(scope void delegate(out clock_t, out clock_t) code) {
-			return (out begin, out end){
+			return benchmark((out begin, out end){
 				foreach (i; 0 .. xs2.length) xs2[i].randomize();
 				code(begin, end);
-			}.benchmark();
+			});
 		}
 
 		import core.volatile : volatileStore;

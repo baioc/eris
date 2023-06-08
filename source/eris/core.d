@@ -9,23 +9,23 @@ static assert(__traits(isUnsigned, hash_t));
 /// C-style null-terminated string.
 alias stringz = char*;
 
-/++
-Error code signaling; zero is success.
-
-Rationale: Compatible with C practice (and with D's `opApply` delegate parameter).
-+/
+/// C-style error code; zero is success.
 alias err_t = int;
 
 
 /++
 Free-function version of [opCmp](https://dlang.org/spec/operatoroverloading.html#compare);
-useful to compare primitives in generic code.
+useful to efficiently compare anything (including primitives) in generic code.
 +/
 pragma(inline)
-int opCmp(T)(in T a, in T b) if (__traits(isScalar, T)) {
-	if (a < b) return -1;
-	if (a > b) return 1;
-	return 0;
+int opCmp(T)(in T a, in T b) {
+	static if (__traits(hasMember, T, "opCmp")) {
+		return a.opCmp(b);
+	} else {
+		if (a < b) return -1;
+		if (a > b) return 1;
+		return 0;
+	}
 }
 
 ///
@@ -34,14 +34,14 @@ nothrow @nogc @safe pure unittest {
 	static foreach (Scalar; AliasSeq!(char, ubyte, int, size_t, float, double)) {{
 		const Scalar two = 2;
 		const Scalar three = 3;
-		assert( two.opCmp(three)  < 0 );
-		assert( three.opCmp(two)  > 0 );
-		assert( two.opCmp(two)   == 0 );
-		assert( two.opCmp(three) != 0 );
+		assert( opCmp(two, three)  < 0 );
+		assert( opCmp(three, two)  > 0 );
+		assert( opCmp(two, two)   == 0 );
+		assert( opCmp(two, three) != 0 );
 	}}
 }
 
 nothrow @nogc @safe pure unittest {
-	assert( uint.max.opCmp(1) > 0 );
-	assert(  int.min.opCmp(2) < 0 );
+	assert( opCmp(uint.max, 1) > 0 );
+	assert( opCmp(int.min, 2)  < 0 );
 }

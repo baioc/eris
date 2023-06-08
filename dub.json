@@ -7,7 +7,7 @@
 	"copyright": "Copyright © 2023, Gabriel B. Sant'Anna",
 	"authors": ["Gabriel B. Sant'Anna"],
 
-	"toolchainRequirements": { "frontend": ">=2.101" },
+	"toolchainRequirements": {"frontend": ">=2.101"},
 	"buildRequirements": ["allowWarnings"],
 	"dflags": ["-preview=fieldwise"],
 	"buildTypes": {
