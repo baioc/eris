@@ -70,13 +70,13 @@ struct String32 {
 	}
 }
 
-void randomize(out int output, in int input = rand()) {
-	output = input;
+void randomize(out int output) {
+	output = rand();
 }
 
-void randomize(out String32 output, in int input = rand()) {
+void randomize(out String32 output) {
 	import core.stdc.stdio : snprintf;
-	snprintf(output.ptr, output.length, "%032d", input);
+	snprintf(output.ptr, output.length, "%031d", rand());
 }
 
 err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {

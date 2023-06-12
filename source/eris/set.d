@@ -126,7 +126,7 @@ nothrow @nogc @safe pure unittest {
 version (D_BetterC) {} else {
 	import eris.container : Iterable;
 
-	/// A generic interface for finite sets.
+	/// A generic interface for (finite) extensional sets.
 	interface ExtensionalSet(Element) : Set!Element, Iterable!Element {
 	 nothrow @nogc:
 		/// Query the number of elements in the set.
