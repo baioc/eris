@@ -17,19 +17,18 @@ alias err_t = int;
 Free-function version of [opCmp](https://dlang.org/spec/operatoroverloading.html#compare);
 useful to efficiently compare anything (including primitives) in generic code.
 +/
-pragma(inline)
 int opCmp(T)(in T a, in T b) {
 	static if (__traits(hasMember, T, "opCmp")) {
 		return a.opCmp(b);
 	} else {
 		if (a < b) return -1;
-		if (a > b) return 1;
-		return 0;
+		else if (a > b) return 1;
+		else /* if (a == b) */ return 0;
 	}
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	import std.meta : AliasSeq;
 	static foreach (Scalar; AliasSeq!(char, ubyte, int, size_t, float, double)) {{
 		const Scalar two = 2;
@@ -41,7 +40,7 @@ nothrow @nogc @safe pure unittest {
 	}}
 }
 
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	assert( opCmp(uint.max, 1) > 0 );
 	assert( opCmp(int.min, 2)  < 0 );
 }

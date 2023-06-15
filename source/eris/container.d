@@ -33,7 +33,7 @@ template isIterable(I) {
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	static assert(  isIterable!(int[]) );
 	static assert( !isIterable!int     );
 	static assert( !isIterable!bool    );
@@ -41,7 +41,7 @@ nothrow @nogc @safe pure unittest {
 }
 
 version (D_BetterC) {} else {
-	nothrow @nogc @safe pure unittest {
+	nothrow @nogc pure unittest {
 		alias T = const(string);
 		alias I = Iterable!T;
 		static assert(isIterable!(I, T));
@@ -50,7 +50,6 @@ version (D_BetterC) {} else {
 }
 
 /// Returns the first element yielded by a given iterable type (undefined if empty).
-pragma(inline)
 auto front(Iterable)(auto ref Iterable it) {
 	foreach (x; it) return x;
 	assert(0, "expected a non-empty iterable");
@@ -68,7 +67,7 @@ template ElementType(Iterable) {
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	static assert(is(ElementType!(int[]) == int));
 	static assert(is(ElementType!string : char));
 }

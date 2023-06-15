@@ -6,7 +6,7 @@
 			"type": "gdb",
 			"request": "launch",
 			"cwd": "${workspaceRoot}",
-			"target": "eris-test-library",
+			"target": "bc-eris-test-library",
 		},
 	]
 }

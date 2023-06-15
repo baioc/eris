@@ -13,7 +13,7 @@ struct Accumulator {
 	// mean and M2 accumulators used in Welford's online variance calculation algorithm
 	// ref: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 
- pragma(inline) nothrow @nogc pure @safe public:
+ pragma(inline) nothrow @nogc pure public:
 	/// Accumulate a given value. Ignores `NaN`s.
 	void opOpAssign(string op : "+")(in double x) {
 		import std.math.operations : fmin, fmax;
@@ -31,36 +31,36 @@ struct Accumulator {
 	/// ditto
 	alias put = opOpAssign!"+";
 
- const @property:
+ @property:
 	/// Number of accumulated values.
-	size_t count() => _count;
+	size_t count() const => _count;
 
 	/// Smallest accumulated value.
-	double min() => _min;
+	double min() const => _min;
 
 	/// Biggest accumulated value.
-	double max() => _max;
+	double max() const => _max;
 
 	/// Average accumulated value.
-	double mean() => _mean;
+	double mean() const => _mean;
 
 	/// Population variance.
-	double variance() => count > 0 ? _m2 / _count : double.init;
+	double variance() const => count > 0 ? _m2 / _count : double.init;
 
 	/// Sample variance.
-	double var() => count > 1 ? _m2 / (_count - 1) : double.init;
+	double var() const => count > 1 ? _m2 / (_count - 1) : double.init;
 
 	private import core.math : sqrt;
 
 	/// Population standard deviation.
-	double standardDeviation() => sqrt(this.variance);
+	double standardDeviation() const => sqrt(this.variance);
 
 	/// Sample standard deviation.
-	double std() => sqrt(this.var);
+	double std() const => sqrt(this.var);
 }
 
 ///
-nothrow @nogc @safe unittest {
+nothrow @nogc unittest {
 	import std.range.primitives : put, isOutputRange;
 	import std.math.operations : isClose;
 

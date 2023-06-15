@@ -4,7 +4,7 @@ import core.stdc.string : strcmp;
 import core.stdc.time : clock, clock_t, CLOCKS_PER_SEC;
 import core.stdc.stdlib : rand;
 
-import eris.core : stringz, err_t;
+import eris.core : stringz, err_t, hash_t;
 import eris.math : Accumulator;
 
 
@@ -18,9 +18,10 @@ version (D_Coverage) {} else extern(C) err_t main(int argc, const(stringz)* argv
 err_t runUnittests() {
 	enum string[] moduleNames = [
 		"eris.core",
-		"eris.array",
 		"eris.math",
+		"eris.array",
 		"eris.container",
+		"eris.allocator",
 		"eris.btree",
 		"eris.set",
 	];
@@ -44,6 +45,7 @@ err_t doBenchmarks(const(stringz[]) args) {
 	return __LINE__;
 }
 
+
 Accumulator benchmark(
 	scope void delegate(out clock_t, out clock_t) code,
 	uint replications = 30
@@ -60,14 +62,28 @@ in (code != null)
 	return acc;
 }
 
+nothrow @nogc pure
+hash_t fnv(const(ubyte)[] bytes) {
+	uint hash = 2166136261u;
+	foreach (b; bytes) {
+		hash ^= b;
+		hash *= 16777619u;
+	}
+	return hash;
+}
 
 struct String32 {
 	char[32] str;
 	alias str this;
+ nothrow @nogc:
 	int opCmp(ref const(String32) other) const {
 		import core.stdc.string : strncmp;
 		return strncmp(this.str.ptr, other.str.ptr, str.sizeof);
 	}
+	hash_t toHash() const @trusted {
+		return fnv((cast(const(ubyte)*)this.str)[0 .. str.sizeof]);
+	}
+	bool opEquals(ref const(String32) other) const => (this.opCmp(other) == 0);
 }
 
 void randomize(out int output) {
@@ -156,6 +172,7 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 	return 0;
 }
 
+
 struct AASet(T) {
 	alias Unit = void[0];
 	Unit[T] aa;
@@ -191,15 +208,11 @@ err_t benchmarkRedBlackTree(int n) {
 struct BTree(T) {
 	import eris.btree;
 	eris.btree.BTree!T btree;
+	@disable this(this);
+	~this() { btree.clear(); }
 	void upsert(T x) { btree.put(x); }
 	bool opBinaryRight(string op : "in")(in T x) const => x in btree;
 	void remove(in T x) { btree.remove(x); }
 }
 
-err_t benchmarkBTree(int n) {
-	version (D_BetterC) {
-		assert(0, "FIXME: no eris.set:BTree in betterC (yet)");
-	} else {
-		return setBenchmarks!("eris.btree", BTree)(n);
-	}
-}
+err_t benchmarkBTree(int n) => setBenchmarks!("eris.btree", BTree)(n);

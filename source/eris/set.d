@@ -22,14 +22,13 @@ enum bool isSet(S, E) = __traits(compiles, (const(S) s){
 
 version (D_BetterC) {} else {
 	///
-	nothrow @nogc @safe pure unittest {
+	nothrow @nogc pure unittest {
 		alias T = const(string);
 		static assert(isSet!(Set!T, T));
 	}
 }
 
 /// Allows any callable predicate to be used as an intensional set definition.
-pragma(inline)
 bool contains(Callable, Element)(in Callable predicate, in Element x)
 if (isCallable!Callable)
 {
@@ -37,7 +36,7 @@ if (isCallable!Callable)
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	assert( ((int n) => n % 2 == 0).contains(2) );
 	const isEven = (int n) => n % 2 == 0;
 	assert(!isEven.contains(1));
@@ -56,7 +55,7 @@ if (isSet!(A, const(Element)))
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	const even = (int n) => n % 2 == 0;
 	const odd = setComplement!int(even);
 	foreach (n; 0 .. 100) assert(even.contains(n) != odd.contains(n));
@@ -75,7 +74,7 @@ if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	const small = (int n) => n < 10;
 	const big = (int n) => n >= 10;
 	const any = setUnion!int(small, big);
@@ -95,7 +94,7 @@ if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	const from08to66 = (int n) => n >=  8 && n < 66;
 	const from42to99 = (int n) => n >= 42 && n < 99;
 	const result = setIntersection!int(from08to66, from42to99);
@@ -115,7 +114,7 @@ if (isSet!(A, const(Element)) && isSet!(B, const(Element)))
 }
 
 ///
-nothrow @nogc @safe pure unittest {
+nothrow @nogc pure unittest {
 	const from08to66 = (int n) => n >=  8 && n < 66;
 	const from42to99 = (int n) => n >= 42 && n < 99;
 	const result = setDifference!int(from08to66, from42to99);
@@ -157,7 +156,7 @@ template isExtensionalSet(S) {
 
 version (D_BetterC) {} else {
 	///
-	nothrow @nogc @safe pure unittest {
+	nothrow @nogc pure unittest {
 		import std.meta : AliasSeq;
 		static foreach (T; AliasSeq!(int, const(string))) {{
 			alias Set = ExtensionalSet!T;
@@ -170,7 +169,6 @@ version (D_BetterC) {} else {
 }
 
 /// Gives an intensional interpretation to all extensional sets by defining `contains` in terms of `at`.
-pragma(inline)
 bool contains(Set, T)(in Set s, in T x)
 if (isExtensionalSet!Set && is(T : const(ElementType!Set)))
 {
@@ -178,7 +176,6 @@ if (isExtensionalSet!Set && is(T : const(ElementType!Set)))
 }
 
 /// Defines an extensional set's `at` for slices. O(n).
-pragma(inline)
 inout(Element)* at(Element)(inout(Element[]) haystack, in Element needle) {
 	foreach (ref inout x; haystack) {
 		if (x == needle) return &x;
@@ -214,7 +211,6 @@ Params:
 	x = element to look for in the set
 	default_ = default value returned when no element matching `x` is found
 +/
-pragma(inline)
 inout(Element) get(Set, Element)(auto ref inout(Set) set, in Element x, inout(Element) default_)
 if (isExtensionalSet!(Set, Element))
 {
@@ -294,7 +290,7 @@ version (D_BetterC) {} else {
 		/++
 		Removes all elements from the set without necessarily reducing its capacity.
 
-		If elements are structs with a destructor defined, they will all be destroyed.
+		If existing elements are structs with a destructor defined, these will be called.
 		+/
 		void clear()
 		out (; this.length == 0);
@@ -351,7 +347,7 @@ template isMutableSet(S) {
 
 version (D_BetterC) {} else {
 	///
-	nothrow @nogc @safe pure unittest {
+	nothrow @nogc pure unittest {
 		import std.meta : AliasSeq;
 		import std.range.primitives : isOutputRange;
 		static foreach (T; AliasSeq!(int, string)) {{

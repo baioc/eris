@@ -14,7 +14,7 @@ extern "C" {
 }
 
 
-size_t fnv_1a(const void *ptr, size_t n) {
+size_t fnv(const void *ptr, size_t n) {
 	uint32_t hash = 2166136261u;
 	const unsigned char *bytes = static_cast<const unsigned char *>(ptr);
 	for (size_t i = 0; i < n; ++i) {

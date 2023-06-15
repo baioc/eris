@@ -3,6 +3,8 @@ module eris.btree;
 
 import std.typecons : Ternary;
 
+import eris.allocator : isAllocator, Mallocator, make, dispose;
+
 
 /// Static parameters for [BTree] template.
 struct BTreeParameters {
@@ -17,9 +19,6 @@ struct BTreeParameters {
 }
 
 
-// TODO: make this betterC-compatible
-version (D_BetterC) {} else {
-
 /++
 Single-threaded B-tree data structure.
 
@@ -28,7 +27,9 @@ The main tradeoff w.r.t other self-balancing trees is that $(B insertions and de
 B-tree will move multiple elements around per operation, invalidating references and iterators).
 When elements are big, consider storing them through indirect references.
 +/
-struct BTree(T, BTreeParameters params = BTreeParameters.init) {
+struct BTree(T, BTreeParameters params = BTreeParameters.init, Allocator = Mallocator)
+if (isAllocator!Allocator)
+{
  private:
 	import std.algorithm.comparison : max;
 	import std.algorithm.mutation : move;
@@ -74,57 +75,73 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	TreeNode* root = null;
 	size_t totalInUse = 0;
 	static if (params.customCompare) {
-		int delegate(ref const(T), ref const(T)) nothrow opCmp = null;
+		int delegate(ref const(T), ref const(T)) nothrow @nogc opCmp = null;
 		invariant(opCmp != null, "custom comparison can't be null");
 	}
+	Allocator allocator;
 
  public:
 	static if (params.customCompare) {
 		@disable this();
-		/// Constructor taking in a custom ordering function.
-		this(int delegate(ref const(T), ref const(T)) nothrow opCmp) {
+		// Constructor taking in a custom ordering function and allocator.
+		this(int delegate(ref const(T), ref const(T)) nothrow @nogc opCmp, Allocator alloc) {
 			this.opCmp = opCmp;
+			this.allocator = alloc;
+		}
+	} else static if (!is(Allocator == Mallocator)) {
+		@disable this();
+		// Constructor taking in a custom allocator.
+		this(Allocator alloc) {
+			this.allocator = alloc;
 		}
 	}
 
-	/// Implements [eris.set.MutableSet.clear]
+	/// Implements [eris.set.MutableSet.clear]. NOTE: deallocates everything.
 	void clear() {
-		// TODO: destroy if hasElaborateDestructor!T
+		this.deallocate(this.root);
 		this.root = null;
 		this.totalInUse = 0;
 	}
 
 	/// Implements [eris.set.ExtensionalSet.contains]
-	pragma(inline)
 	bool opBinaryRight(string op : "in")(in T x) const => this[x] != null;
 
 	/// Implements [eris.set.ExtensionalSet.length]
-	pragma(inline)
 	@property size_t length() const => this.totalInUse;
 
 	/// Iterates over elements in order. NOTE: should not be used while inserting or deleting elements from the tree.
-	pragma(inline)
-	int opApply(scope int delegate(ref T) nothrow dg) => opApply(this.root, dg);
+	int opApply(scope int delegate(ref T) nothrow @nogc dg) => opApply(this.root, dg);
 
 	/// ditto
-	pragma(inline)
-	int opApply(scope int delegate(ref const(T)) nothrow dg) const {
-		return (cast(BTree) this).opApply(cast(int delegate(ref T) nothrow) dg);
+	int opApply(scope int delegate(ref const(T)) nothrow @nogc dg) const {
+		return (cast(BTree) this).opApply(cast(int delegate(ref T) nothrow @nogc) dg);
 	}
 
 	/// Implements [eris.set.ExtensionalSet.at]. NOTE: returned pointer may be invalidated by any insertions or deletions.
-	pragma(inline)
-	inout(T)* opIndex(in T x) inout => search(this.root, x);
+	inout(T)* opIndex(in T x) inout =>  this.search(this.root, x);
 
-	/// Implements [eris.set.MutableSet.upsert]. NOTE: returned pointer may be invalidated by any following insertions or deletions.
-	T* upsert(in T x, scope T delegate() nothrow create, scope void delegate(ref T) nothrow update = null)
+	/++
+	Implements [eris.set.MutableSet.upsert].
+
+	NOTE: returned pointer may be invalidated by any following insertions or deletions.
+	NOTE: allocation failure is irrecoverable in this implementation.
+	+/
+	@system
+	T* upsert(
+		in T x,
+		scope T delegate() nothrow @nogc create,
+		scope void delegate(ref T) nothrow @nogc update = null
+	)
 	in (create != null)
-	out (p; (x in this) == (p != null))
+	out (p; (p == null) || (*p in this))
 	{
 		// root node is lazily allocated as a leaf (at first)
-		if (this.root == null) this.root = new TreeNode();
+		if (this.root == null) {
+			this.root = allocator.make!TreeNode();
+			if (this.root == null) return null;
+		}
 
-		// then insert normally
+		// then we insert normally
 		TreeNode* splitNode = null;
 		T* inserted = insert(this.root, x, create, update, splitNode, this.totalInUse);
 		if (splitNode == null) return inserted;
@@ -132,7 +149,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		// whenever a split bubbles up to the root, we create a new root with
 		// a single element (the median) and two children (left and right nodes)
 		TreeNode* oldRoot = this.root;
-		auto newRoot = new InternalNode();
+		auto newRoot = allocator.make!InternalNode();
+		if (newRoot == null) return null; // XXX: can't undo split(s)
 		newRoot.slotsInUse = 1;
 		move(oldRoot.slots[oldRoot.slotsInUse - 1], newRoot.slots[0]);
 		const bool moveInserted = &oldRoot.slots[oldRoot.slotsInUse - 1] == inserted;
@@ -144,20 +162,18 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	}
 
 	/// Implements [eris.set.MutableSet.put]. NOTE: returned pointer may be invalidated by any following insertions or deletions.
-	pragma(inline)
 	T* put(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
 
 	/// Implements [eris.set.MutableSet.remove]
-	pragma(inline)
-	bool remove(in T x, scope void delegate(ref T) nothrow destroy = null) {
+	bool remove(in T x, scope void delegate(ref T) nothrow @nogc destroy = null) {
 		if (this.root == null) return false;
-		void delegate(ref T) nothrow dg = destroy == null ? (ref x){ .destroy(x); } : destroy;
-		return searchAndRemove(this.root, x, dg);
+		void delegate(ref T) nothrow @nogc dg = destroy == null ? (ref x){ .destroy(x); } : destroy;
+		return this.searchAndRemove(this.root, x, dg);
 	}
 
+	// TODO: actually, define opCmp instead
 	/// Element-wise comparison.
-	pragma(inline)
-	bool opEquals(BTreeParameters P)(ref const(BTree!(T,P)) other) const {
+	bool opEquals(BTreeParameters P, A)(ref const(BTree!(T,P,A)) other) const {
 		if (&this == cast(typeof(&this)) &other) return true;
 		if (this.length != other.length) return false;
 		foreach (ref const x; this) if (x !in other) return false;
@@ -165,7 +181,6 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	}
 
 	/// Combined element hash.
-	pragma(inline)
 	hash_t toHash() const {
 		hash_t hash = 0;
 		foreach (ref const x; this) hash = .hashOf(x, hash);
@@ -237,8 +252,8 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	T* insert(
 		TreeNode* node,
 		in T x,
-		scope T delegate() nothrow create,
-		scope void delegate(ref T) nothrow update,
+		scope T delegate() nothrow @nogc create,
+		scope void delegate(ref T) nothrow @nogc update,
 		out TreeNode* splitNode,
 		ref size_t totalInUse
 	)
@@ -267,9 +282,10 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		if (!node.isInternal && node.slotsInUse == nodeSlots) {
 			// we'll always create a new right node, but the split is not so
 			// trivial because there's still a pending insertion
+			splitNode = this.allocator.make!TreeNode();
+			if (splitNode == null) return null;
 			T created = create();
 			totalInUse++;
-			splitNode = new TreeNode();
 			return split(node, splitNode, created, pos);
 		}
 
@@ -300,14 +316,15 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 		}
 
 		// .. but when there are no slots left, another split is needed at this level
-		auto newNode = new InternalNode();
+		auto newNode = this.allocator.make!InternalNode();
+		if (newNode == null) return null; // XXX: can't undo split(s)
 		T* splitInsert = split(internalNode, newNode, median, pos, splitNode);
 		splitNode = &newNode.asTreeNode;
 		return moveInserted ? splitInsert : inserted;
 	}
 
 	// recursively search for an element to delete
-	bool searchAndRemove(TreeNode* node, in T x, scope void delegate(ref T) nothrow destroy)
+	bool searchAndRemove(TreeNode* node, in T x, scope void delegate(ref T) nothrow @nogc destroy)
 	in (node != null && destroy != null)
 	{
 		// if the element is found at this level, destroy it and clear the slot
@@ -441,22 +458,36 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 				}
 			}
 			left.slotsInUse = left.slotsInUse + 1 + right.slotsInUse;
-			right.slotsInUse = 0;
-			// TODO: explicitly deallocate right node
+			if (right.isInternal) this.allocator.dispose(cast(InternalNode*) right);
+			else this.allocator.dispose(right);
+			// ^ good citizenship: deallocate the correct type
 
 			// if the root just became empty, delete it and make the tree shallower
 			// by using the merged node as the new root; else just rebalance the
 			// parent (should happen as we go back up the call stack)
 			if (&parent.asTreeNode == this.root && this.root.slotsInUse == 0) {
+				this.allocator.dispose(parent);
 				this.root = left;
-				// TODO: explicitly deallocate old root
 			}
 		}
 	}
 
+	void deallocate(TreeNode* node) {
+		import std.traits : hasElaborateDestructor;
+		if (node == null) return;
+		static if (hasElaborateDestructor!T) {
+			foreach (ref slot; node.slots[0 .. node.slotsInUse]) destroy(slot);
+		}
+		if (node.isInternal) {
+			auto internal = cast(InternalNode*) node;
+			foreach (child; internal.children[0 .. node.slotsInUse + 1]) deallocate(child);
+		}
+		this.allocator.dispose(node);
+	}
+
  static:
 	// in-order iteration over used slots
-	int opApply(TreeNode* node, scope int delegate(ref T) nothrow dg) {
+	int opApply(TreeNode* node, scope int delegate(ref T) nothrow @nogc dg) {
 		if (node == null) return 0;
 		const m = node.slotsInUse;
 		if (node.isInternal) {
@@ -479,13 +510,11 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 	}
 
 	// easier-to-call overloads for leaf and internal nodes (see template impl below)
-	pragma(inline) {
-		T* split(TreeNode* left, TreeNode* right, ref T x, int pos) {
-			return splitImpl!false(left, right, x, pos, null);
-		}
-		T* split(InternalNode* left, InternalNode* right, ref T x, int pos, TreeNode* splitChild) {
-			return splitImpl!true(&left.asTreeNode, &right.asTreeNode, x, pos, splitChild);
-		}
+	T* split(TreeNode* left, TreeNode* right, ref T x, int pos) {
+		return splitImpl!false(left, right, x, pos, null);
+	}
+	T* split(InternalNode* left, InternalNode* right, ref T x, int pos, TreeNode* splitChild) {
+		return splitImpl!true(&left.asTreeNode, &right.asTreeNode, x, pos, splitChild);
 	}
 
 	// split a left node's elements across it and a newly allocated right node,
@@ -566,14 +595,14 @@ struct BTree(T, BTreeParameters params = BTreeParameters.init) {
 
 
 ///
-nothrow /* TODO: @nogc */ unittest {
+nothrow @nogc unittest {
 	// tip: debug w/ visualizer at https://www.cs.usfca.edu/~galles/visualization/BTree.html
 	enum BTreeParameters params = {
 		nodeSlots: 3,
 		customCompare: true,
 		useBinarySearch: Ternary.yes,
 	};
-	auto btree = BTree!(int, params)((ref a, ref b) => a - b);
+	auto btree = BTree!(int, params)((ref a, ref b) => a - b, Mallocator.init);
 	static const payload = [
 		34, 33, 38,
 		28, 27, 22,
@@ -627,6 +656,4 @@ nothrow /* TODO: @nogc */ unittest {
 	btree.clear();
 	assert(btree.length == 0);
 	foreach (x; payload) assert(x !in btree);
-}
-
 }

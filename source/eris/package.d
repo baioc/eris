@@ -51,7 +51,8 @@ Link_References:
 module eris;
 
 public import eris.core;
-public import eris.array;
 public import eris.math;
+public import eris.array;
 public import eris.container;
+public import eris.allocator;
 public import eris.set;
