@@ -1,7 +1,7 @@
 /// In-place manipulation of slices.
 module eris.array;
 
-import std.algorithm.mutation : move;
+import core.lifetime : move;
 
 
 /++
@@ -62,6 +62,7 @@ in (n > 0)
 	}
 }
 
+///
 nothrow @nogc unittest {
 	static int[] empty = [];
 	empty.shiftLeft(2); // does nothing

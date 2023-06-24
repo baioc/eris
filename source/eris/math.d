@@ -10,18 +10,20 @@ struct Accumulator {
 	double _max = -double.infinity;
 	double _mean = 0;
 	double _m2 = 0;
-	// mean and M2 accumulators used in Welford's online variance calculation algorithm
+	// ^ mean and M2 accumulators used in Welford's online variance calculation algorithm
 	// ref: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
 
+	import core.math : sqrt;
+	import std.math.traits : isNaN;
+
  pragma(inline) nothrow @nogc pure public:
-	/// Accumulate a given value. Ignores `NaN`s.
-	void opOpAssign(string op : "+")(in double x) {
-		import std.math.operations : fmin, fmax;
-		import std.math.traits : isNaN;
-		if (isNaN(x)) return;
+	/// Accumulate a given (non-NaN) value.
+	void opOpAssign(string op : "+")(double x)
+	in (!isNaN(x))
+	{
 		_count += 1;
-		_min = fmin(_min, x);
-		_max = fmax(_max, x);
+		_min = x < _min ? x : _min;
+		_max = x > _max ? x : _max;
 		const delta = x - _mean;
 		_mean += delta / _count;
 		const delta2 = x - _mean;
@@ -36,21 +38,19 @@ struct Accumulator {
 	size_t count() const => _count;
 
 	/// Smallest accumulated value.
-	double min() const => _min;
+	double min() const in (count > 0) => _min;
 
 	/// Biggest accumulated value.
-	double max() const => _max;
+	double max() const in (count > 0) => _max;
 
 	/// Average accumulated value.
-	double mean() const => _mean;
+	double mean() const in (count > 0) => _mean;
 
 	/// Population variance.
-	double variance() const => count > 0 ? _m2 / _count : double.init;
+	double variance() const in (count > 0) => _m2 / _count;
 
 	/// Sample variance.
-	double var() const => count > 1 ? _m2 / (_count - 1) : double.init;
-
-	private import core.math : sqrt;
+	double var() const in (count > 1) => _m2 / (_count - 1);
 
 	/// Population standard deviation.
 	double standardDeviation() const => sqrt(this.variance);

@@ -4,25 +4,26 @@ import core.stdc.string : strcmp;
 import core.stdc.time : clock, clock_t, CLOCKS_PER_SEC;
 import core.stdc.stdlib : rand;
 
-import eris.core : stringz, err_t, hash_t;
 import eris.math : Accumulator;
 
+alias stringz = char*;
 
-version (D_Coverage) {} else extern(C) err_t main(int argc, const(stringz)* argv) {
+
+version (D_Coverage) {} else extern(C) int main(int argc, const(stringz)* argv) {
 	const(stringz)[] args = argv[0 .. argc];
 	if (argc <= 1 || strcmp(args[1], "unittest") == 0) return runUnittests();
 	else if (strcmp(args[1], "benchmark") == 0)        return doBenchmarks(args[2..$]);
 	return __LINE__;
 }
 
-err_t runUnittests() {
+int runUnittests() {
 	enum string[] moduleNames = [
 		"eris.core",
-		"eris.math",
 		"eris.array",
-		"eris.container",
+		"eris.math",
 		"eris.allocator",
 		"eris.btree",
+		"eris.container",
 		"eris.set",
 	];
 	static foreach (moduleName; moduleNames) {
@@ -34,7 +35,7 @@ err_t runUnittests() {
 	return 0;
 }
 
-err_t doBenchmarks(const(stringz[]) args) {
+int doBenchmarks(const(stringz[]) args) {
 	if (args.length < 2) return __LINE__;
 	const type = args[0];
 	import core.stdc.stdlib : atoi;
@@ -63,7 +64,7 @@ in (code != null)
 }
 
 nothrow @nogc pure
-hash_t fnv(const(ubyte)[] bytes) {
+size_t fnv(const(ubyte)[] bytes) {
 	uint hash = 2166136261u;
 	foreach (b; bytes) {
 		hash ^= b;
@@ -80,7 +81,7 @@ struct String32 {
 		import core.stdc.string : strncmp;
 		return strncmp(this.str.ptr, other.str.ptr, str.sizeof);
 	}
-	hash_t toHash() const @trusted {
+	size_t toHash() const @trusted {
 		return fnv((cast(const(ubyte)*)this.str)[0 .. str.sizeof]);
 	}
 	bool opEquals(ref const(String32) other) const => (this.opCmp(other) == 0);
@@ -95,7 +96,7 @@ void randomize(out String32 output) {
 	snprintf(output.ptr, output.length, "%031d", rand());
 }
 
-err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
+int setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 	if (n < 0) return __LINE__;
 	const n2 = n * 2;
 
@@ -121,14 +122,14 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 		ulong store;
 
 		const upsert = benchmarkRandomized((out begin, out end){
-			Set!Element set;
+			auto set = Set!Element();
 			begin = clock();
 			foreach (x; xs) set.upsert(x);
 			end = clock();
 		});
 
 		const lookupFind = benchmarkRandomized((out begin, out end){
-			Set!Element set;
+			auto set = Set!Element();
 			foreach (x; xs) set.upsert(x);
 			begin = clock();
 			foreach (x; xs) {
@@ -139,7 +140,7 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 		});
 
 		const lookupFail = benchmarkRandomized((out begin, out end){
-			Set!Element set;
+			auto set = Set!Element();
 			foreach (x; xs2) set.upsert(x);
 			foreach (x; xs) set.remove(x);
 			begin = clock();
@@ -151,7 +152,7 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 		});
 
 		const remove = benchmarkRandomized((out begin, out end){
-			Set!Element set;
+			auto set = Set!Element();
 			foreach (x; xs) set.upsert(x);
 			begin = clock();
 			foreach (x; xs) set.remove(x);
@@ -174,14 +175,14 @@ err_t setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
 
 
 struct AASet(T) {
-	alias Unit = void[0];
+	import eris.core : Unit;
 	Unit[T] aa;
 	void upsert(T x) { aa[x] = Unit.init; }
 	bool opBinaryRight(string op : "in")(in T x) const => (x in aa) != null;
 	void remove(in T x) { aa.remove(x); }
 }
 
-err_t benchmarkAASet(int n) {
+int benchmarkAASet(int n) {
 	version (D_BetterC) {
 		assert(0, "no AAs in betterC mode");
 	} else {
@@ -191,13 +192,14 @@ err_t benchmarkAASet(int n) {
 
 struct RedBlackTree(T) {
 	import std.container.rbtree;
-	std.container.rbtree.RedBlackTree!T rbt = redBlackTree!T();
+	std.container.rbtree.RedBlackTree!T rbt;
+	static RedBlackTree opCall() { RedBlackTree t; t.rbt = redBlackTree!T(); return t; }
 	void upsert(T x) { rbt.insert(x); }
 	bool opBinaryRight(string op : "in")(in T x) const => x in rbt;
 	void remove(in T x) { rbt.removeKey(x); }
 }
 
-err_t benchmarkRedBlackTree(int n) {
+int benchmarkRedBlackTree(int n) {
 	version (D_BetterC) {
 		assert(0, "no std.container.rbtree in betterC mode");
 	} else {
@@ -208,11 +210,11 @@ err_t benchmarkRedBlackTree(int n) {
 struct BTree(T) {
 	import eris.btree;
 	eris.btree.BTree!T btree;
-	@disable this(this);
 	~this() { btree.clear(); }
+	@disable this(this);
 	void upsert(T x) { btree.put(x); }
 	bool opBinaryRight(string op : "in")(in T x) const => x in btree;
 	void remove(in T x) { btree.remove(x); }
 }
 
-err_t benchmarkBTree(int n) => setBenchmarks!("eris.btree", BTree)(n);
+int benchmarkBTree(int n) => setBenchmarks!("eris.btree", BTree)(n);

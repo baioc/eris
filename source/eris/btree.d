@@ -8,54 +8,67 @@ import eris.allocator : isAllocator, Mallocator, make, dispose;
 
 /// Static parameters for [BTree] template.
 struct BTreeParameters {
+	/// Whether or not to allow duplicates in the B-Tree; defaults to `false`.
+	bool allowDuplicates = false;
+
 	/// Max elements stored per node, must be at least 2. Use `size_t.max` for default.
 	size_t nodeSlots = size_t.max;
 
 	/// Whether to use a binary intra-node search. Use `Ternary.unknown` for default.
 	Ternary useBinarySearch = Ternary.unknown;
 
-	/// Use a custom comparison function as an alternative to static [opCmp](https://dlang.org/spec/operatoroverloading.html#compare).
+	/++
+	Use a custom comparison function as an alternative to static
+	[opCmp](https://dlang.org/spec/operatoroverloading.html#compare).
+	+/
 	bool customCompare = false;
 }
 
 
 /++
-Single-threaded B-tree data structure.
+B-tree data structure template.
 
-B-trees are optimized for "cache friendliness" and low memory overhead per stored element.
-The main tradeoff w.r.t other self-balancing trees is that $(B insertions and deletions from a
-B-tree will move multiple elements around per operation, invalidating references and iterators).
+B-trees are optimized for "cache friendliness" and low overhead per stored element.
+The main tradeoff w.r.t other self-balancing trees is that $(B insertions and
+deletions from a B-tree will move multiple elements around per operation,
+invalidating references and iterators).
 When elements are big, consider storing them through indirect references.
+
+If duplicate elements are allowed in the B-Tree, their order is unspecified.
 +/
 struct BTree(T, BTreeParameters params = BTreeParameters.init, Allocator = Mallocator)
 if (isAllocator!Allocator)
 {
  private:
 	import std.algorithm.comparison : max;
-	import std.algorithm.mutation : move;
-	import eris.core : hash_t;
+	import core.lifetime : move;
 
 	// more slots per node mean better locality in leaves, so we probably want a
-	// multiple of cache line size, 256 (-4 for metada) was empirically chosen
+	// multiple of cache line size, 256 (-4 for metada) was experimentally chosen
 	enum size_t nodeSlots =
 		params.nodeSlots != size_t.max ? params.nodeSlots : max(2, (256 - 4) / T.sizeof);
 	static assert(nodeSlots >= 2);
 
-	// default bsearch threshold is simply 2x that size
-	enum size_t binarySearchThreshold = max(4, (512 - 4) / T.sizeof);
+	// linear is faster than binary search for small arrays, so we only default
+	// to bsearch when our givenNodeSlots > 2 * defaultNodeSlots(u64)
 	enum bool useBinarySearch =
 		params.useBinarySearch == Ternary.yes
-		|| (params.useBinarySearch == Ternary.unknown && nodeSlots > binarySearchThreshold);
+		|| (params.useBinarySearch == Ternary.unknown && nodeSlots > 63);
 
  private:
-	struct TreeNode {
+	static struct TreeNode {
 		import std.bitmanip : bitfields;
 		T[nodeSlots] slots;
-		mixin(bitfields!(
-			uint, "slotsInUse", 31,
-			bool, "isInternal", 1)
-		);
-		static opCall(bool isInternal = false) {
+		debug { // XXX: bitfields-as-a-lib doesn't play well with GDB
+			uint slotsInUse;
+			bool isInternal;
+		} else {
+			mixin(bitfields!(
+				uint, "slotsInUse", 31,
+				bool, "isInternal", 1)
+			);
+		}
+		static TreeNode opCall(bool isInternal = false) {
 			TreeNode n;
 			n.isInternal = isInternal;
 			return n;
@@ -63,7 +76,7 @@ if (isAllocator!Allocator)
 	}
 	static assert(!TreeNode.init.isInternal);
 
-	struct InternalNode {
+	static struct InternalNode {
 		TreeNode asTreeNode = TreeNode(true);
 		alias asTreeNode this;
 		TreeNode*[nodeSlots+1] children;
@@ -75,8 +88,10 @@ if (isAllocator!Allocator)
 	TreeNode* root = null;
 	size_t totalInUse = 0;
 	static if (params.customCompare) {
-		int delegate(ref const(T), ref const(T)) nothrow @nogc opCmp = null;
-		invariant(opCmp != null, "custom comparison can't be null");
+		int delegate(ref const(T), ref const(T)) nothrow @nogc compare = null;
+		invariant(compare != null, "custom comparison can't be null");
+	} else {
+		import eris.core : compare = opCmp;
 	}
 	Allocator allocator;
 
@@ -85,7 +100,7 @@ if (isAllocator!Allocator)
 		@disable this();
 		// Constructor taking in a custom ordering function and allocator.
 		this(int delegate(ref const(T), ref const(T)) nothrow @nogc opCmp, Allocator alloc) {
-			this.opCmp = opCmp;
+			this.compare = opCmp;
 			this.allocator = alloc;
 		}
 	} else static if (!is(Allocator == Mallocator)) {
@@ -96,35 +111,70 @@ if (isAllocator!Allocator)
 		}
 	}
 
-	/// Implements [eris.set.MutableSet.clear]. NOTE: deallocates everything.
-	void clear() {
+	/++
+	Removes all elements and deallocates all memory for this tree.
+
+	If existing elements are structs with a destructor defined, those will be called.
+	+/
+	void clear()
+	out (; this.length == 0)
+	{
 		this.deallocate(this.root);
 		this.root = null;
 		this.totalInUse = 0;
 	}
 
-	/// Implements [eris.set.ExtensionalSet.contains]
-	bool opBinaryRight(string op : "in")(in T x) const => this[x] != null;
-
-	/// Implements [eris.set.ExtensionalSet.length]
-	@property size_t length() const => this.totalInUse;
-
-	/// Iterates over elements in order. NOTE: should not be used while inserting or deleting elements from the tree.
-	int opApply(scope int delegate(ref T) nothrow @nogc dg) => opApply(this.root, dg);
-
-	/// ditto
-	int opApply(scope int delegate(ref const(T)) nothrow @nogc dg) const {
-		return (cast(BTree) this).opApply(cast(int delegate(ref T) nothrow @nogc) dg);
-	}
-
-	/// Implements [eris.set.ExtensionalSet.at]. NOTE: returned pointer may be invalidated by any insertions or deletions.
-	inout(T)* opIndex(in T x) inout =>  this.search(this.root, x);
+	/// Check if the tree contains an element.
+	bool opBinaryRight(string op : "in")(in T x) const => (this.opIndex(x) != null);
 
 	/++
-	Implements [eris.set.MutableSet.upsert].
+	Gets the address of the first matching element, or `null` if it isn't in the tree.
 
-	NOTE: returned pointer may be invalidated by any following insertions or deletions.
-	NOTE: allocation failure is irrecoverable in this implementation.
+	NOTE: returned pointer may be invalidated by any insertions or deletions.
+	+/
+	inout(T)* opIndex(in T x) inout => this.search(this.root, x);
+
+	/// Returns the number of elements currently stored in the tree.
+	@property size_t length() const => this.totalInUse;
+
+	/++
+	Adds an element to the tree.
+
+	If the tree allows duplicates, this is an insertion; if it doesn't, this is an upsert.
+
+	NOTE: $(LIST
+		* Returned pointer may be invalidated by any following insertions or deletions.
+		* Allocation failure is irrecoverable in this implementation.
+	)
+
+	Returns: A pointer to the stored element, or `null` in case of insertion failure.
+	+/
+	@system
+	T* put(T x) {
+		static if (params.allowDuplicates)
+			return this.upsert(x, () => move(x));
+		else
+			return this.upsert(x, () => move(x), (ref old){ move(x, old); });
+	}
+
+	/++
+	Updates an element already in the set or creates a new one therein.
+
+	NOTE: $(LIST
+		* Returned pointer may be invalidated by any following insertions or deletions.
+		* Allocation failure is irrecoverable in this implementation.
+	)
+
+	Params:
+		x = element being looked up
+		create = callback to create a new matching element to insert
+		update = callback to modify an existing element in the tree; only called
+			if not `null`; should never be provided if the tree allows duplicates
+
+	Returns:
+		A pointer to the element currently stored in the set, whether it was updated or inserted.
+		This value is only `null` if the element would have been inserted but
+		the operation didn't succeed at some point (i.e. memory allocation failure).
 	+/
 	@system
 	T* upsert(
@@ -132,9 +182,12 @@ if (isAllocator!Allocator)
 		scope T delegate() nothrow @nogc create,
 		scope void delegate(ref T) nothrow @nogc update = null
 	)
-	in (create != null)
-	out (p; (p == null) || (*p in this))
-	{
+	in {
+		assert(create != null);
+		static if (params.allowDuplicates) assert(update == null);
+	} out (p) {
+		assert((p == null) || (*p in this));
+	} do {
 		// root node is lazily allocated as a leaf (at first)
 		if (this.root == null) {
 			this.root = allocator.make!TreeNode();
@@ -161,17 +214,31 @@ if (isAllocator!Allocator)
 		return moveInserted ? &newRoot.slots[0] : inserted;
 	}
 
-	/// Implements [eris.set.MutableSet.put]. NOTE: returned pointer may be invalidated by any following insertions or deletions.
-	T* put(T x) => this.upsert(x, () => move(x), (ref old){ move(x, old); });
+	/++
+	Removes (at most) one element from the tree, if it's there.
 
-	/// Implements [eris.set.MutableSet.remove]
+	Params:
+		x = element being looked up in the tree
+		destroy = callback to cleanup after the element being removed (if found);
+			defaults to [object.destroy](https://dlang.org/library/object/destroy.html).
+
+	Returns: Whether or not at least one `x` was contained in the tree.
+	+/
 	bool remove(in T x, scope void delegate(ref T) nothrow @nogc destroy = null) {
 		if (this.root == null) return false;
 		void delegate(ref T) nothrow @nogc dg = destroy == null ? (ref x){ .destroy(x); } : destroy;
 		return this.searchAndRemove(this.root, x, dg);
 	}
 
-	// TODO: actually, define opCmp instead
+	/// Iterates over elements in order. NOTE: should not be used while inserting or deleting elements from the tree.
+	int opApply(scope int delegate(ref T) nothrow @nogc dg) => opApply(this.root, dg);
+
+	/// ditto
+	int opApply(scope int delegate(ref const(T)) nothrow @nogc dg) const {
+		return (cast(BTree) this).opApply(cast(int delegate(ref T) nothrow @nogc) dg);
+	}
+
+	// TODO: actually, define opCmp instead, with external iterators
 	/// Element-wise comparison.
 	bool opEquals(BTreeParameters P, A)(ref const(BTree!(T,P,A)) other) const {
 		if (&this == cast(typeof(&this)) &other) return true;
@@ -181,8 +248,8 @@ if (isAllocator!Allocator)
 	}
 
 	/// Combined element hash.
-	hash_t toHash() const {
-		hash_t hash = 0;
+	size_t toHash() const {
+		size_t hash = 0;
 		foreach (ref const x; this) hash = .hashOf(x, hash);
 		return hash;
 	}
@@ -190,43 +257,51 @@ if (isAllocator!Allocator)
  private:
 	import eris.array : shift, shiftLeft, unshift;
 
-	// performs a sorted search for a given needle x, returning the leftmost
-	// index i such that haystack[0 .. |i|) < x <= haystack[|i| .. $); this index
-	// will have its sign bit set to 1 iff x < haystack[i] (needle not found),
-	// so a sign bit of 0 indicates that the needle was found at haystack[i];
-	// NOTE: do NOT clear the sign bit with negation, as int.min is a possibility
-	int bisect(in T[] haystack, in T needle) const
+	void deallocate(TreeNode* node) {
+		import std.traits : hasElaborateDestructor;
+		if (node == null) return;
+		static if (hasElaborateDestructor!T) {
+			foreach (ref slot; node.slots[0 .. node.slotsInUse]) destroy(slot);
+		}
+		if (node.isInternal) {
+			auto internal = cast(InternalNode*) node;
+			foreach (uint i; 0 .. internal.slotsInUse + 1) {
+				deallocate(internal.children[i]);
+				internal.children[i] = null;
+			}
+			this.allocator.dispose(internal);
+		} else {
+			this.allocator.dispose(node);
+		}
+	}
+
+	// returns the leftmost index i such that `array[0 .. |i|) < x <= array[|i| .. $)`;
+	// this index will have its sign bit set to 1 iff `i == array.length || x < array[i]`
+	// (i.e., the element was not found) and to 0 if x is at `haystack[i]`.
+	// NOTE: do NOT clear the sign bit with negation, as `int.min` is a very real possibility.
+	int bisect(in T[] array, in T x) const
 	out (pos) {
-		if (pos >= 0) assert(haystack[pos] == needle);
-		else assert((pos & ~(1 << 31)) <= haystack.length);
+		if (pos >= 0) assert(compare(array[pos], x) == 0);
+		else assert((pos & ~(1 << 31)) <= array.length);
 	} do {
-		import eris.core : opCmp;
 		static assert(nodeSlots < int.max);
 
 		static if (useBinarySearch) {
 			int begin = 0;
-			int end = cast(int) haystack.length;
+			int end = cast(int) array.length;
 			while (end - begin >= 1) {
 				const mid = begin + (end - begin)/2;
-				static if (params.customCompare) {
-					const cmp = this.opCmp(haystack[mid], needle);
-				} else {
-					const cmp = opCmp(haystack[mid], needle);
-				}
-				if (cmp < 0) begin = mid + 1;
+				const cmp = compare(x, array[mid]);
+				if (cmp < 0) end = mid;
 				else if (cmp == 0) return mid;
-				else if (cmp > 0) end = mid;
+				else if (cmp > 0) begin = mid + 1;
 			}
 			return begin | (1 << 31);
 
 		} else /* use linear search */ {
 			int i = 0;
-			for (; i < haystack.length; ++i) {
-				static if (params.customCompare) {
-					const cmp = this.opCmp(haystack[i], needle);
-				} else {
-					const cmp = opCmp(haystack[i], needle);
-				}
+			for (; i < array.length; ++i) {
+				const cmp = compare(array[i], x);
 				if (cmp < 0) continue;
 				if (cmp == 0) return i;
 				if (cmp > 0) break;
@@ -262,12 +337,16 @@ if (isAllocator!Allocator)
 		// search this (non-null) node's slots
 		int pos = bisect(node.slots[0 .. node.slotsInUse], x);
 
-		// if found, just return the right address
-		if (pos >= 0) {
-			if (update != null) update(node.slots[pos]);
-			return &node.slots[pos];
+		// if found, just return the right address (when no duplicates)
+		static if (!params.allowDuplicates) {
+			if (pos >= 0) {
+				if (update != null) update(node.slots[pos]);
+				return &node.slots[pos];
+			}
+			pos &= ~(1 << 31);
+		} else { // if duplicates are allowed, we always insert
+			if (pos < 0) pos &= ~(1 << 31);
 		}
-		pos &= ~(1 << 31);
 
 		// when a leaf is reached and has space, insert right there
 		if (!node.isInternal && node.slotsInUse < nodeSlots) {
@@ -458,8 +537,11 @@ if (isAllocator!Allocator)
 				}
 			}
 			left.slotsInUse = left.slotsInUse + 1 + right.slotsInUse;
-			if (right.isInternal) this.allocator.dispose(cast(InternalNode*) right);
-			else this.allocator.dispose(right);
+			if (right.isInternal) {
+				this.allocator.dispose(cast(InternalNode*) right);
+			} else {
+				this.allocator.dispose(right);
+			}
 			// ^ good citizenship: deallocate the correct type
 
 			// if the root just became empty, delete it and make the tree shallower
@@ -472,43 +554,7 @@ if (isAllocator!Allocator)
 		}
 	}
 
-	void deallocate(TreeNode* node) {
-		import std.traits : hasElaborateDestructor;
-		if (node == null) return;
-		static if (hasElaborateDestructor!T) {
-			foreach (ref slot; node.slots[0 .. node.slotsInUse]) destroy(slot);
-		}
-		if (node.isInternal) {
-			auto internal = cast(InternalNode*) node;
-			foreach (child; internal.children[0 .. node.slotsInUse + 1]) deallocate(child);
-		}
-		this.allocator.dispose(node);
-	}
-
  static:
-	// in-order iteration over used slots
-	int opApply(TreeNode* node, scope int delegate(ref T) nothrow @nogc dg) {
-		if (node == null) return 0;
-		const m = node.slotsInUse;
-		if (node.isInternal) {
-			auto internalNode = cast(InternalNode*) node;
-			int stop = 0;
-			for (int i = 0; i < m; ++i) {
-				stop = opApply(internalNode.children[i], dg);
-				if (stop) return stop;
-				stop = dg(internalNode.slots[i]);
-				if (stop) return stop;
-			}
-			return opApply(internalNode.children[m], dg);
-		} else {
-			foreach (ref x; node.slots[0 .. m]) {
-				int stop = dg(x);
-				if (stop) return stop;
-			}
-			return 0;
-		}
-	}
-
 	// easier-to-call overloads for leaf and internal nodes (see template impl below)
 	T* split(TreeNode* left, TreeNode* right, ref T x, int pos) {
 		return splitImpl!false(left, right, x, pos, null);
@@ -536,9 +582,10 @@ if (isAllocator!Allocator)
 		assert(pos >= 0);
 		assert(pos <= nodeSlots);
 		assert(isInternal == (splitChild != null));
-	} out (;
-		left.slotsInUse < nodeSlots && right.slotsInUse < nodeSlots
-	) do {
+	} out (_) {
+		assert(left.slotsInUse < nodeSlots);
+		assert(right.slotsInUse < nodeSlots);
+	} do {
 		T* inserted;
 		const int mid = nodeSlots / 2;
 		auto leftInternal = cast(InternalNode*) left;
@@ -590,6 +637,29 @@ if (isAllocator!Allocator)
 		}
 
 		return inserted;
+	}
+
+	// in-order iteration over used slots
+	int opApply(TreeNode* node, scope int delegate(ref T) nothrow @nogc dg) {
+		if (node == null) return 0;
+		const m = node.slotsInUse;
+		if (node.isInternal) {
+			auto internalNode = cast(InternalNode*) node;
+			int stop = 0;
+			for (int i = 0; i < m; ++i) {
+				stop = opApply(internalNode.children[i], dg);
+				if (stop) return stop;
+				stop = dg(internalNode.slots[i]);
+				if (stop) return stop;
+			}
+			return opApply(internalNode.children[m], dg);
+		} else {
+			foreach (ref x; node.slots[0 .. m]) {
+				int stop = dg(x);
+				if (stop) return stop;
+			}
+			return 0;
+		}
 	}
 }
 
@@ -656,4 +726,32 @@ nothrow @nogc unittest {
 	btree.clear();
 	assert(btree.length == 0);
 	foreach (x; payload) assert(x !in btree);
+}
+
+///
+nothrow @nogc unittest {
+	static struct S {
+	 nothrow @nogc:
+		int x;
+		uint discriminator = 0;
+		alias x this;
+		int opCmp(in S other) const => this.x - other.x;
+	}
+
+	enum BTreeParameters params = { allowDuplicates: true };
+	BTree!(S, params) btree;
+	static const payload = [ S(6), S(2), S(4), S(5), S(6, 9), S(4, 20) ];
+
+	assert(btree.length == 0);
+	foreach (x; payload) {
+		S* p = btree.put(x);
+		assert(*p == x);
+		assert(x in btree);
+	}
+	assert(btree.length == payload.length);
+
+	assert(S(4) in btree);
+	assert(S(4, 20) in btree);
+	assert(S(6) in btree);
+	assert(S(6, 9) in btree);
 }

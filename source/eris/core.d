@@ -2,24 +2,28 @@
 module eris.core;
 
 
-/// D uses `size_t` for hash values.
-alias hash_t = size_t;
-static assert(__traits(isUnsigned, hash_t));
+/++
+Zero-sized type carrying no information at all.
 
-/// C-style null-terminated string.
-alias stringz = char*;
+NOTE: Make sure not to use this in extern (C) signatures, as the ABI is unspecified.
++/
+alias Unit = void[0];
 
-/// C-style error code; zero is success.
-alias err_t = int;
+static assert(Unit.sizeof == 0);
 
 
 /++
 Free-function version of [opCmp](https://dlang.org/spec/operatoroverloading.html#compare);
 useful to efficiently compare anything (including primitives) in generic code.
+
+NOTE: this also implements a total order over floating-point types.
 +/
 int opCmp(T)(in T a, in T b) {
 	static if (__traits(hasMember, T, "opCmp")) {
 		return a.opCmp(b);
+	} else static if (__traits(isFloating, T)) {
+		import std.math.operations : cmp;
+		return cmp(a, b);
 	} else {
 		if (a < b) return -1;
 		else if (a > b) return 1;
@@ -43,4 +47,10 @@ nothrow @nogc pure unittest {
 nothrow @nogc pure unittest {
 	assert( opCmp(uint.max, 1) > 0 );
 	assert( opCmp(int.min, 2)  < 0 );
+}
+
+nothrow @nogc pure unittest {
+	assert( opCmp(-double.nan, double.nan)       < 0 );
+	assert( opCmp(-double.nan, -double.infinity) < 0 );
+	assert( opCmp(double.infinity, double.nan)   < 0 );
 }
