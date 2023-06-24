@@ -53,7 +53,7 @@ struct String32 {
 	};
 	struct Hash {
 		bool operator()(const String32& self) const {
-			return fnv_1a(self.chars, sizeof(self.chars));
+			return fnv(self.chars, sizeof(self.chars));
 		}
 	};
 };

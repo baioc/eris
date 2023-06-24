@@ -3,7 +3,7 @@ CXX ?= clang++
 
 DFLAGS ?= \
 	-preview=fieldwise \
-	-O -release -g \
+	-O -release -inline -boundscheck=off -g \
 	-betterC -static --fvisibility=hidden \
 	-i
 
