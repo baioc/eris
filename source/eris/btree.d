@@ -8,7 +8,7 @@ import eris.allocator : isAllocator, Mallocator, make, dispose;
 
 /// Static parameters for [BTree] template.
 struct BTreeParameters {
-	/// Whether or not to allow duplicates in the B-Tree; defaults to `false`.
+	/// Whether or not to allow duplicates in the B-tree; defaults to `false`.
 	bool allowDuplicates = false;
 
 	/// Max elements stored per node, must be at least 2. Use `size_t.max` for default.
@@ -24,6 +24,8 @@ struct BTreeParameters {
 	bool customCompare = false;
 }
 
+// TODO: treat all T* as void* in user-facing templates -> should reduce bloat
+
 
 /++
 B-tree data structure template.
@@ -34,31 +36,17 @@ deletions from a B-tree will move multiple elements around per operation,
 invalidating references and iterators).
 When elements are big, consider storing them through indirect references.
 
-If duplicate elements are allowed in the B-Tree, their order is unspecified.
+If duplicate elements are allowed in the B-tree, they have unspecified order among themselves.
 +/
 struct BTree(T, BTreeParameters params = BTreeParameters.init, Allocator = Mallocator)
 if (isAllocator!Allocator)
 {
  private:
 	import std.algorithm.comparison : max;
-	import core.lifetime : move;
+	import eris.core : move;
 
-	// more slots per node mean better locality in leaves, so we probably want a
-	// multiple of cache line size, 256 (-4 for metada) was experimentally chosen
-	enum size_t nodeSlots =
-		params.nodeSlots != size_t.max ? params.nodeSlots : max(2, (256 - 4) / T.sizeof);
-	static assert(nodeSlots >= 2);
-
-	// linear is faster than binary search for small arrays, so we only default
-	// to bsearch when our givenNodeSlots > 2 * defaultNodeSlots(u64)
-	enum bool useBinarySearch =
-		params.useBinarySearch == Ternary.yes
-		|| (params.useBinarySearch == Ternary.unknown && nodeSlots > 63);
-
- private:
-	static struct TreeNode {
+	static struct NodeMetaData {
 		import std.bitmanip : bitfields;
-		T[nodeSlots] slots;
 		debug { // XXX: bitfields-as-a-lib doesn't play well with GDB
 			uint slotsInUse;
 			bool isInternal;
@@ -68,38 +56,67 @@ if (isAllocator!Allocator)
 				bool, "isInternal", 1)
 			);
 		}
+		uint indexInParent = uint.max;
+		InternalNode* parent = null;
+	}
+
+	// more slots per node mean better locality in leaves, so we probably want a
+	// multiple of cache line size, 256 (-metadata) was experimentally chosen
+	enum size_t nodeSlots = params.nodeSlots != size_t.max
+		? params.nodeSlots
+		: max(2, (256 - NodeMetaData.sizeof) / T.sizeof);
+	static assert(nodeSlots >= 2, "B-trees must have at least 2 elements per node");
+
+	// linear is faster than binary search for small arrays, so we only default
+	// to bsearch when our givenNodeSlots > 2 * defaultNodeSlots(u64)
+	enum size_t bsearchThreshold = 2 * (256 - NodeMetaData.sizeof) / double.sizeof;
+	enum bool useBinarySearch =
+		params.useBinarySearch == Ternary.yes
+		|| (params.useBinarySearch == Ternary.unknown && nodeSlots > bsearchThreshold);
+
+ private:
+	static struct TreeNode {
+		NodeMetaData metadata;
+		T[nodeSlots] slots;
+		alias metadata this;
 		static TreeNode opCall(bool isInternal = false) {
 			TreeNode n;
 			n.isInternal = isInternal;
 			return n;
 		}
 	}
-	static assert(!TreeNode.init.isInternal);
+	static assert(TreeNode.init.isInternal == false);
+	static assert(TreeNode.init.slotsInUse == 0);
+	static assert(TreeNode.init.parent == null);
 
 	static struct InternalNode {
 		TreeNode asTreeNode = TreeNode(true);
-		alias asTreeNode this;
 		TreeNode*[nodeSlots+1] children;
+		alias asTreeNode this;
 	}
-	static assert(InternalNode.init.isInternal);
+	static assert(InternalNode.init.isInternal == true);
 	static assert(InternalNode.asTreeNode.offsetof == 0);
 
  private:
 	TreeNode* root = null;
+	invariant(root == null || root.parent == null);
+
 	size_t totalInUse = 0;
+
 	static if (params.customCompare) {
 		int delegate(ref const(T), ref const(T)) nothrow @nogc compare = null;
 		invariant(compare != null, "custom comparison can't be null");
 	} else {
 		import eris.core : compare = opCmp;
 	}
+
 	Allocator allocator;
 
  public:
 	static if (params.customCompare) {
 		@disable this();
 		// Constructor taking in a custom ordering function and allocator.
-		this(int delegate(ref const(T), ref const(T)) nothrow @nogc opCmp, Allocator alloc) {
+		this(int delegate(ref const(T), ref const(T)) nothrow @nogc opCmp, Allocator alloc = Allocator.init) {
 			this.compare = opCmp;
 			this.allocator = alloc;
 		}
@@ -149,7 +166,6 @@ if (isAllocator!Allocator)
 
 	Returns: A pointer to the stored element, or `null` in case of insertion failure.
 	+/
-	@system
 	T* put(T x) {
 		static if (params.allowDuplicates)
 			return this.upsert(x, () => move(x));
@@ -176,7 +192,6 @@ if (isAllocator!Allocator)
 		This value is only `null` if the element would have been inserted but
 		the operation didn't succeed at some point (i.e. memory allocation failure).
 	+/
-	@system
 	T* upsert(
 		in T x,
 		scope T delegate() nothrow @nogc create,
@@ -206,10 +221,10 @@ if (isAllocator!Allocator)
 		if (newRoot == null) return null; // XXX: can't undo split(s)
 		newRoot.slotsInUse = 1;
 		move(oldRoot.slots[oldRoot.slotsInUse - 1], newRoot.slots[0]);
-		const bool moveInserted = &oldRoot.slots[oldRoot.slotsInUse - 1] == inserted;
+		const bool moveInserted = (&oldRoot.slots[oldRoot.slotsInUse - 1] == inserted);
 		oldRoot.slotsInUse = oldRoot.slotsInUse - 1;
-		newRoot.children[0] = oldRoot;
-		newRoot.children[1] = splitNode;
+		setChild(newRoot, 0, oldRoot);
+		setChild(newRoot, 1, splitNode);
 		this.root = &newRoot.asTreeNode;
 		return moveInserted ? &newRoot.slots[0] : inserted;
 	}
@@ -255,7 +270,7 @@ if (isAllocator!Allocator)
 	}
 
  private:
-	import eris.array : shift, shiftLeft, unshift;
+	import eris.array : shift, shiftLeft;
 
 	void deallocate(TreeNode* node) {
 		import std.traits : hasElaborateDestructor;
@@ -265,7 +280,7 @@ if (isAllocator!Allocator)
 		}
 		if (node.isInternal) {
 			auto internal = cast(InternalNode*) node;
-			foreach (uint i; 0 .. internal.slotsInUse + 1) {
+			foreach (int i; 0 .. internal.slotsInUse + 1) {
 				deallocate(internal.children[i]);
 				internal.children[i] = null;
 			}
@@ -379,7 +394,7 @@ if (isAllocator!Allocator)
 		// left child) into this node and insert the new right child pointer
 		// NOTE: ended up moving the inserted element? adjust returned address
 		T median = move(child.slots[child.slotsInUse - 1]);
-		const bool moveInserted = &child.slots[child.slotsInUse - 1] == inserted;
+		const bool moveInserted = (&child.slots[child.slotsInUse - 1] == inserted);
 		child.slotsInUse = child.slotsInUse - 1;
 		pos = bisect(internalNode.slots[0 .. internalNode.slotsInUse], median);
 		assert(pos < 0);
@@ -389,7 +404,7 @@ if (isAllocator!Allocator)
 		if (internalNode.slotsInUse < nodeSlots) {
 			internalNode.slotsInUse = internalNode.slotsInUse + 1;
 			shift(internalNode.slots[0 .. internalNode.slotsInUse], pos, median);
-			shift(internalNode.children[0 .. internalNode.slotsInUse + 1], pos + 1, splitNode);
+			shiftChild(internalNode, pos + 1, splitNode);
 			splitNode = null;
 			return moveInserted ? &internalNode.slots[pos] : inserted;
 		}
@@ -446,8 +461,8 @@ if (isAllocator!Allocator)
 				rebalanceIfNeeded(internalNode, internalNode.slotsInUse);
 			}
 		}
-		TreeNode* left = parent.children[pos];
-		removeBiggest(left);
+		TreeNode* leftSubTree = parent.children[pos];
+		removeBiggest(leftSubTree);
 		rebalanceIfNeeded(parent, pos);
 	}
 
@@ -463,7 +478,6 @@ if (isAllocator!Allocator)
 
 		// we can also skip internal nodes with enough remaining load
 		enum uint minLoad = nodeSlots / 2;
-		static assert(minLoad > 0);
 		if (child.isInternal && child.slotsInUse >= minLoad) return;
 
 		// at this point, we know the child is deficient, so we'll start by
@@ -484,8 +498,11 @@ if (isAllocator!Allocator)
 			if (child.isInternal) {
 				auto childAsInternal = cast(InternalNode*) child;
 				auto rightAsInternal = cast(InternalNode*) rightSibling;
-				TreeNode* sparePointer = unshift(rightAsInternal.children[0 .. rightSibling.slotsInUse + 1], 0);
-				childAsInternal.children[child.slotsInUse + 1] = sparePointer;
+				TreeNode* sparePointer = move(rightAsInternal.children[0]);
+				for (int i = 0; i + 1 < rightSibling.slotsInUse + 1; ++i) {
+					setChild(rightAsInternal, i, move(rightAsInternal.children[i + 1]));
+				}
+				setChild(childAsInternal, child.slotsInUse + 1, sparePointer);
 			}
 			child.slotsInUse = child.slotsInUse + 1;
 			rightSibling.slotsInUse = rightSibling.slotsInUse - 1;
@@ -498,8 +515,7 @@ if (isAllocator!Allocator)
 			if (child.isInternal) {
 				auto leftAsInternal = cast(InternalNode*) leftSibling;
 				auto childAsInternal = cast(InternalNode*) child;
-				TreeNode* sparePointer = move(leftAsInternal.children[leftSibling.slotsInUse]);
-				shift(childAsInternal.children[0 .. child.slotsInUse + 1], 0, sparePointer);
+				shiftChild(childAsInternal, 0, move(leftAsInternal.children[leftSibling.slotsInUse]));
 			}
 			leftSibling.slotsInUse = leftSibling.slotsInUse - 1;
 
@@ -522,7 +538,9 @@ if (isAllocator!Allocator)
 			// separator element in parent moves down
 			move(parent.slots[separatorIndex], left.slots[left.slotsInUse]);
 			shiftLeft(parent.slots[separatorIndex .. parent.slotsInUse]);
-			shiftLeft(parent.children[separatorIndex + 1 .. parent.slotsInUse + 1]);
+			for (int i = separatorIndex + 1; i + 1 < parent.slotsInUse + 1; ++i) {
+				setChild(parent, i, move(parent.children[i + 1]));
+			}
 			parent.slotsInUse = parent.slotsInUse - 1;
 
 			// merge left <- right
@@ -533,7 +551,7 @@ if (isAllocator!Allocator)
 				auto leftAsInternal = cast(InternalNode*) left;
 				auto rightAsInternal = cast(InternalNode*) right;
 				foreach (int i; 0 .. right.slotsInUse + 1) {
-					move(rightAsInternal.children[i], leftAsInternal.children[left.slotsInUse + 1 + i]);
+					setChild(leftAsInternal, left.slotsInUse + 1 + i, move(rightAsInternal.children[i]));
 				}
 			}
 			left.slotsInUse = left.slotsInUse + 1 + right.slotsInUse;
@@ -555,6 +573,24 @@ if (isAllocator!Allocator)
 	}
 
  static:
+	void setChild(InternalNode* parent, uint index, TreeNode* child)
+	in (parent != null && index <= nodeSlots && child != null)
+	{
+		parent.children[index] = child;
+		child.indexInParent = index;
+		child.parent = parent;
+	}
+
+	void shiftChild(InternalNode* parent, uint index, TreeNode* child)
+	in (parent != null && index <= nodeSlots && child != null)
+	{
+		const int target = index;
+		for (int i = parent.slotsInUse; i - 1 >= target; --i) {
+			setChild(parent, i, move(parent.children[i - 1]));
+		}
+		setChild(parent, index, child);
+	}
+
 	// easier-to-call overloads for leaf and internal nodes (see template impl below)
 	T* split(TreeNode* left, TreeNode* right, ref T x, int pos) {
 		return splitImpl!false(left, right, x, pos, null);
@@ -583,8 +619,8 @@ if (isAllocator!Allocator)
 		assert(pos <= nodeSlots);
 		assert(isInternal == (splitChild != null));
 	} out (_) {
-		assert(left.slotsInUse < nodeSlots);
-		assert(right.slotsInUse < nodeSlots);
+		assert(left.slotsInUse <= nodeSlots);
+		assert(right.slotsInUse <= nodeSlots);
 	} do {
 		T* inserted;
 		const int mid = nodeSlots / 2;
@@ -595,13 +631,13 @@ if (isAllocator!Allocator)
 			// for an insertion in the left node, set up the right node first
 			foreach (int i; mid .. nodeSlots) {
 				move(left.slots[i], right.slots[i - mid]);
-				static if (isInternal) move(leftInternal.children[i+1], rightInternal.children[i-mid+1]);
+				static if (isInternal) setChild(rightInternal, i-mid+1, move(leftInternal.children[i+1]));
 			}
 			right.slotsInUse = nodeSlots - mid;
 			// then do the insertion on the left node
 			left.slotsInUse = mid - 0 + 1;
 			shift(left.slots[0 .. left.slotsInUse], pos, x);
-			static if (isInternal) shift(leftInternal.children[0 .. left.slotsInUse+1], pos+1, splitChild);
+			static if (isInternal) shiftChild(leftInternal, pos+1, splitChild);
 			inserted = &left.slots[pos];
 
 		} else /* if (pos > mid) */ {
@@ -609,16 +645,16 @@ if (isAllocator!Allocator)
 			int to = 0;
 			foreach (int i; mid + 1 .. pos) {
 				move(left.slots[i], right.slots[to]);
-				static if (isInternal) move(leftInternal.children[i+1], rightInternal.children[to+1]);
+				static if (isInternal) setChild(rightInternal, to+1, move(leftInternal.children[i+1]));
 				++to;
 			}
 			move(x, right.slots[to]);
-			static if (isInternal) move(splitChild, rightInternal.children[to+1]);
+			static if (isInternal) setChild(rightInternal, to+1, splitChild);
 			inserted = &right.slots[to];
 			++to;
 			foreach (int i; pos .. nodeSlots) {
 				move(left.slots[i], right.slots[to]);
-				static if (isInternal) move(leftInternal.children[i+1], rightInternal.children[to+1]);
+				static if (isInternal) setChild(rightInternal, to+1, move(leftInternal.children[i+1]));
 				++to;
 			}
 			// then simply adjust slot use count
@@ -633,7 +669,7 @@ if (isAllocator!Allocator)
 		// pointer slot of the just-created right node, which should be null now
 		static if (isInternal) {
 			assert(rightInternal.children[0] == null);
-			move(leftInternal.children[left.slotsInUse], rightInternal.children[0]);
+			setChild(rightInternal, 0, move(leftInternal.children[left.slotsInUse]));
 		}
 
 		return inserted;
@@ -672,7 +708,7 @@ nothrow @nogc unittest {
 		customCompare: true,
 		useBinarySearch: Ternary.yes,
 	};
-	auto btree = BTree!(int, params)((ref a, ref b) => a - b, Mallocator.init);
+	auto btree = BTree!(int, params)((ref a, ref b) => a - b);
 	static const payload = [
 		34, 33, 38,
 		28, 27, 22,

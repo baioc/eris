@@ -1,6 +1,8 @@
 /// Core type definitions, templates and helper procedures.
 module eris.core;
 
+import core.lifetime : moveImpl = move;
+
 
 /++
 Zero-sized type carrying no information at all.
@@ -13,13 +15,15 @@ static assert(Unit.sizeof == 0);
 
 
 /++
-Free-function version of [opCmp](https://dlang.org/spec/operatoroverloading.html#compare);
-useful to efficiently compare anything (including primitives) in generic code.
+Free-function version of [opCmp](https://dlang.org/spec/operatoroverloading.html#compare)
+for generic code.
+
+Can be used to efficiently compare both complex types with a custom `opCmp`, or primitive types.
 
 NOTE: this also implements a total order over floating-point types.
 +/
 int opCmp(T)(in T a, in T b) {
-	static if (__traits(hasMember, T, "opCmp")) {
+	static if (__traits(hasMember, T, "opCmp") && !is(T == U*, U)) {
 		return a.opCmp(b);
 	} else static if (__traits(isFloating, T)) {
 		import std.math.operations : cmp;
@@ -53,4 +57,33 @@ nothrow @nogc pure unittest {
 	assert( opCmp(-double.nan, double.nan)       < 0 );
 	assert( opCmp(-double.nan, -double.infinity) < 0 );
 	assert( opCmp(double.infinity, double.nan)   < 0 );
+}
+
+
+/++
+Phobos `move`, but always by destructive copy when in debug mode.
+
+Performs the same operations as [core.lifetime.move], but when in debug mode the
+moved source is always set to its `.init` value, which is easier to check (e.g.
+`null` for pointers) when looking for referential integrity bugs.
++/
+void move(T)(ref T source, ref T target) {
+	moveImpl(source, target);
+	debug source = T.init;
+}
+
+/// ditto
+T move(T)(ref T source) {
+	debug scope(exit) source = T.init;
+	return moveImpl(source);
+}
+
+///
+nothrow @nogc pure unittest {
+	int x = 1;
+	int* p = &x;
+	int* q = null;
+	move(p, q);
+	assert(q == &x);
+	debug assert(p == null); // only in debug mode!
 }

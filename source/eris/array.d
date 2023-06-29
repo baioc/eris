@@ -1,7 +1,7 @@
 /// In-place manipulation of slices.
 module eris.array;
 
-import core.lifetime : move;
+import eris.core : move;
 
 
 /++

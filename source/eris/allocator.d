@@ -105,31 +105,32 @@ nothrow @nogc unittest {
 	scope(exit) alloc.dispose(mem);
 }
 
+debug private enum bool initialize = true;
+else  private enum bool initialize = false;
+
 /// Destroy and deallocate a given object/array.
-void dispose(Allocator, T)(ref Allocator alloc, auto ref T* p)
+void dispose(Allocator, T)(ref Allocator alloc, T* p)
 if (isAllocator!Allocator)
 {
 	static if (hasElaborateDestructor!T) {
-		if (p) destroy(*p);
+		if (p) destroy!initialize(*p);
 	}
 	void[] mem = (cast(void*)p)[0 .. T.sizeof];
 	alloc.deallocate(mem);
-	debug p = null; // when byref, this should help detect use-after-free
 }
 
 /// ditto
-void dispose(Allocator, T)(ref Allocator alloc, auto ref T[] array)
+void dispose(Allocator, T)(ref Allocator alloc, T[] array)
 if (isAllocator!Allocator)
 {
 	static if (hasElaborateDestructor!T) {
-		foreach (ref x; array) destroy(x);
+		foreach (ref x; array) destroy!initialize(x);
 	}
 	size_t bytes = array.length * T.sizeof;
 	assert(T.sizeof != 0 || (bytes / T.sizeof == array.length));
 	// ^ assert no overflow because we checked during makeArray
 	void[] mem = (cast(void*)array.ptr)[0 .. bytes];
 	alloc.deallocate(mem);
-	debug array = null; // ditto the other overload
 }
 
 
@@ -141,13 +142,13 @@ enum uint platformAlignment = max(
 
 /// C stdlib allocator using malloc and free.
 struct Mallocator {
-	private import core.stdc.stdlib : calloc, free;
+	private import core.stdc.stdlib : malloc, free;
 
  pragma(inline) nothrow @nogc:
 	void[] allocate(size_t size)
 	out (mem; mem.ptr == null || mem.length == size)
 	{
-		void* p = calloc(1, size);
+		void* p = malloc(size);
 		if (p == null) return null;
 		else return p[0 .. size];
 	}
