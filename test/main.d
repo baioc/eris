@@ -36,13 +36,14 @@ int runUnittests() {
 }
 
 int doBenchmarks(const(stringz[]) args) {
-	if (args.length < 2) return __LINE__;
-	const type = args[0];
 	import core.stdc.stdlib : atoi;
-	int size = atoi(args[1]);
-	if (strcmp(type, "aaset") == 0)    return benchmarkAASet(size);
-	if (strcmp(type, "redblack") == 0) return benchmarkRedBlackTree(size);
-	if (strcmp(type, "btree") == 0)    return benchmarkBTree(size);
+	if (args.length < 3) return __LINE__;
+	const container = args[0];
+	const element = args[1];
+	int n = atoi(args[2]);
+	if (strcmp(container, "aaset") == 0)    return benchmarkAASet(element, n);
+	if (strcmp(container, "redblack") == 0) return benchmarkRedBlackTree(element, n);
+	if (strcmp(container, "btree") == 0)    return benchmarkBTree(element, n);
 	return __LINE__;
 }
 
@@ -96,78 +97,82 @@ void randomize(out String32 output) {
 	snprintf(output.ptr, output.length, "%031d", rand());
 }
 
-int setBenchmarks(string name, alias Set)(int n, uint seed = 0) {
+int setBenchmarks(string name, alias Set, Element)(int n, uint seed = 0) {
 	if (n < 0) return __LINE__;
 	const n2 = n * 2;
 
-	import std.meta : AliasSeq;
-	static foreach (Element; AliasSeq!(int, String32)) {{
-		import core.stdc.stdlib : srand, calloc, free;
+	import core.stdc.stdlib : srand, calloc, free;
 
-		auto buffer = cast(Element*) calloc(n2, Element.sizeof);
-		if (n2 != 0 && buffer == null) return __LINE__;
-		scope(exit) free(buffer);
+	auto buffer = cast(Element*) calloc(n2, Element.sizeof);
+	if (n2 != 0 && buffer == null) return __LINE__;
+	scope(exit) free(buffer);
 
-		Element[] xs = buffer[0 .. n];
-		Element[] xs2 = buffer[0 .. n2];
-		srand(seed);
-		Accumulator benchmarkRandomized(scope void delegate(out clock_t, out clock_t) code) {
-			return benchmark((out begin, out end){
-				foreach (i; 0 .. xs2.length) xs2[i].randomize();
-				code(begin, end);
-			});
+	Element[] xs = buffer[0 .. n];
+	Element[] xs2 = buffer[0 .. n2];
+	srand(seed);
+	Accumulator benchmarkRandomized(scope void delegate(out clock_t, out clock_t) code) {
+		return benchmark((out begin, out end){
+			foreach (i; 0 .. xs2.length) {
+				xs2[i].randomize();
+			}
+			version (D_BetterC) {} else {
+				import core.memory : GC;
+				GC.collect();
+			}
+			code(begin, end);
+		});
+	}
+
+	import core.volatile : volatileStore;
+	ulong store;
+
+	const upsert = benchmarkRandomized((out begin, out end){
+		auto set = Set!Element();
+		begin = clock();
+		foreach (x; xs) set.upsert(x);
+		end = clock();
+	});
+
+	const lookupFind = benchmarkRandomized((out begin, out end){
+		auto set = Set!Element();
+		foreach (x; xs) set.upsert(x);
+		begin = clock();
+		foreach (x; xs) {
+			auto b = x in set;
+			volatileStore(&store, b);
 		}
+		end = clock();
+	});
 
-		import core.volatile : volatileStore;
-		ulong store;
+	const lookupFail = benchmarkRandomized((out begin, out end){
+		auto set = Set!Element();
+		foreach (x; xs2) set.upsert(x);
+		foreach (x; xs) set.remove(x);
+		begin = clock();
+		foreach (x; xs) {
+			auto b = x in set;
+			volatileStore(&store, b);
+		}
+		end = clock();
+	});
 
-		const upsert = benchmarkRandomized((out begin, out end){
-			auto set = Set!Element();
-			begin = clock();
-			foreach (x; xs) set.upsert(x);
-			end = clock();
-		});
+	const remove = benchmarkRandomized((out begin, out end){
+		auto set = Set!Element();
+		foreach (x; xs) set.upsert(x);
+		begin = clock();
+		foreach (x; xs) set.remove(x);
+		end = clock();
+	});
 
-		const lookupFind = benchmarkRandomized((out begin, out end){
-			auto set = Set!Element();
-			foreach (x; xs) set.upsert(x);
-			begin = clock();
-			foreach (x; xs) {
-				auto b = x in set;
-				volatileStore(&store, b);
-			}
-			end = clock();
-		});
-
-		const lookupFail = benchmarkRandomized((out begin, out end){
-			auto set = Set!Element();
-			foreach (x; xs2) set.upsert(x);
-			foreach (x; xs) set.remove(x);
-			begin = clock();
-			foreach (x; xs) {
-				auto b = x in set;
-				volatileStore(&store, b);
-			}
-			end = clock();
-		});
-
-		const remove = benchmarkRandomized((out begin, out end){
-			auto set = Set!Element();
-			foreach (x; xs) set.upsert(x);
-			begin = clock();
-			foreach (x; xs) set.remove(x);
-			end = clock();
-		});
-
-		static foreach (op; AliasSeq!(upsert, lookupFind, lookupFail, remove)) {{
-			import core.stdc.stdio : printf;
-			enum string format =
-				"container=" ~ name ~
-				"\telement=" ~ Element.stringof ~
-				"\toperation=" ~ op.stringof ~
-				"\tn=%d\tavg=%.3f\tstd=%.3f\tmin=%.3f\tmax=%.3f\n";
-			printf(format, n, op.mean, op.std, op.min, op.max);
-		}}
+	import std.meta : AliasSeq;
+	static foreach (op; AliasSeq!(upsert, lookupFind, lookupFail, remove)) {{
+		import core.stdc.stdio : printf;
+		enum string format =
+			"container=" ~ name ~
+			"\telement=" ~ Element.stringof ~
+			"\toperation=" ~ op.stringof ~
+			"\tn=%d\tavg=%.3f\tstd=%.3f\tmin=%.3f\tmax=%.3f\n";
+		printf(format, n, op.mean, op.std, op.min, op.max);
 	}}
 
 	return 0;
@@ -182,28 +187,40 @@ struct AASet(T) {
 	void remove(in T x) { aa.remove(x); }
 }
 
-int benchmarkAASet(int n) {
+int benchmarkAASet(const(stringz) element, int n) {
 	version (D_BetterC) {
 		assert(0, "no AAs in betterC mode");
 	} else {
-		return setBenchmarks!("AA-as-set", AASet)(n);
+		if (strcmp(element, "int") == 0) {
+			return setBenchmarks!("AA-as-set", AASet, int)(n);
+		} else if (strcmp(element, "String32") == 0) {
+			return setBenchmarks!("AA-as-set", AASet, String32)(n);
+		} else {
+			return __LINE__;
+		}
 	}
 }
 
 struct RedBlackTree(T) {
 	import std.container.rbtree;
 	std.container.rbtree.RedBlackTree!T rbt;
-	static RedBlackTree opCall() { RedBlackTree t; t.rbt = redBlackTree!T(); return t; }
+	static RedBlackTree opCall() { RedBlackTree t = { rbt: redBlackTree!T() }; return t; }
 	void upsert(T x) { rbt.insert(x); }
 	bool opBinaryRight(string op : "in")(in T x) const => x in rbt;
 	void remove(in T x) { rbt.removeKey(x); }
 }
 
-int benchmarkRedBlackTree(int n) {
+int benchmarkRedBlackTree(const(stringz) element, int n) {
 	version (D_BetterC) {
 		assert(0, "no std.container.rbtree in betterC mode");
 	} else {
-		return setBenchmarks!("std.container.rbtree", RedBlackTree)(n);
+		if (strcmp(element, "int") == 0) {
+			return setBenchmarks!("std.container.rbtree", RedBlackTree, int)(n);
+		} else if (strcmp(element, "String32") == 0) {
+			return setBenchmarks!("std.container.rbtree", RedBlackTree, String32)(n);
+		} else {
+			return __LINE__;
+		}
 	}
 }
 
@@ -217,4 +234,12 @@ struct BTree(T) {
 	void remove(in T x) { btree.remove(x); }
 }
 
-int benchmarkBTree(int n) => setBenchmarks!("eris.btree", BTree)(n);
+int benchmarkBTree(const(stringz) element, int n) {
+	if (strcmp(element, "int") == 0) {
+		return setBenchmarks!("eris.btree", BTree, int)(n);
+	} else if (strcmp(element, "String32") == 0) {
+		return setBenchmarks!("eris.btree", BTree, String32)(n);
+	} else {
+		return __LINE__;
+	}
+}

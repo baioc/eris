@@ -167,9 +167,13 @@ struct StdSet {
 	void remove(const T& x) { treeSet.erase(x); }
 };
 
-int benchmarkStdSet(int n) {
-	return setBenchmarks<StdSet, int, std::less<int>>("std::set", "int", n)
-	     + setBenchmarks<StdSet, String32, String32::Less>("std::set", "String32", n);
+int benchmarkStdSet(const char *element, int n) {
+	if (strcmp(element, "int") == 0) {
+		return setBenchmarks<StdSet, int, std::less<int>>("std::set", "int", n);
+	} else if (strcmp(element, "String32") == 0) {
+		return setBenchmarks<StdSet, String32, String32::Less>("std::set", "String32", n);
+	}
+	return __LINE__;
 }
 
 template <typename T, typename Hash>
@@ -180,17 +184,22 @@ struct StdUnorderedSet {
 	void remove(const T& x) { hashSet.erase(x); }
 };
 
-int benchmarkStdUnorderedSet(int n) {
-	return setBenchmarks<StdUnorderedSet, int, std::hash<int>>("std::unordered_set", "int", n)
-	     + setBenchmarks<StdUnorderedSet, String32, String32::Hash>("std::unordered_set", "String32", n);
+int benchmarkStdUnorderedSet(const char *element, int n) {
+	if (strcmp(element, "int") == 0) {
+		return setBenchmarks<StdUnorderedSet, int, std::hash<int>>("std::unordered_set", "int", n);
+	} else if (strcmp(element, "String32") == 0) {
+		return setBenchmarks<StdUnorderedSet, String32, String32::Hash>("std::unordered_set", "String32", n);
+	}
+	return __LINE__;
 }
 
 
 int main(int argc, char const *argv[]) {
-	if (argc <= 2) return __LINE__;
-	const char *type = argv[1];
-	int size = atoi(argv[2]);
-	if (strcmp(type, "std_set") == 0)           return benchmarkStdSet(size);
-	if (strcmp(type, "std_unordered_set") == 0) return benchmarkStdUnorderedSet(size);
+	if (argc <= 3) return __LINE__;
+	const char *container = argv[1];
+	const char *element = argv[2];
+	int n = atoi(argv[3]);
+	if (strcmp(container, "std_set") == 0)           return benchmarkStdSet(element, n);
+	if (strcmp(container, "std_unordered_set") == 0) return benchmarkStdUnorderedSet(element, n);
 	return __LINE__;
 }

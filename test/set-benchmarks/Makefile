@@ -1,5 +1,5 @@
 DC ?= ldmd2
-CXX ?= clang++
+CXX ?= g++
 
 DFLAGS ?= \
 	-preview=fieldwise \

@@ -568,6 +568,7 @@ if (isAllocator!Allocator)
 			if (&parent.asTreeNode == this.root && this.root.slotsInUse == 0) {
 				this.allocator.dispose(parent);
 				this.root = left;
+				this.root.parent = null;
 			}
 		}
 	}
@@ -776,6 +777,7 @@ nothrow @nogc unittest {
 
 	enum BTreeParameters params = { allowDuplicates: true };
 	BTree!(S, params) btree;
+	scope(exit) btree.clear();
 	static const payload = [ S(6), S(2), S(4), S(5), S(6, 9), S(4, 20) ];
 
 	assert(btree.length == 0);

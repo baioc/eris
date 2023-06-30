@@ -95,7 +95,7 @@
 				"isDefault": false,
 			},
 			"type": "shell",
-			"command": "time ldmd2 -preview=fieldwise -O -release -inline -boundscheck=off -g -I source/ -i test/main.d -of bc-eris-test-library",
+			"command": "/usr/bin/time -v ldmd2 -preview=fieldwise -O -release -inline -boundscheck=off -g -I source/ -i test/main.d -of bc-eris-test-library",
 			"presentation": {
 				"echo": true,
 				"clear": true,
