@@ -51,7 +51,7 @@ version (D_BetterC) {} else {
 
 /// Returns the first element yielded by a given iterable type (undefined if empty).
 auto front(Iterable)(auto ref Iterable it) {
-	foreach (x; it) return x;
+	foreach (ref x; it) return x;
 	assert(0, "expected a non-empty iterable");
 }
 

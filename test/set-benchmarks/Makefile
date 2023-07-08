@@ -2,14 +2,13 @@ DC ?= ldmd2
 CXX ?= g++
 
 DFLAGS ?= \
-	-preview=fieldwise \
-	-O -release -inline -boundscheck=off -g \
+	-O -release -inline \
 	-betterC -static --fvisibility=hidden \
 	-i
 
 CXXFLAGS ?= \
-	-std=c++20 \
-	-O2 -g \
+	-std=c++17 \
+	-O3 \
 	-static -fvisibility=hidden -fvisibility-inlines-hidden
 
 

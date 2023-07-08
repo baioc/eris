@@ -75,68 +75,61 @@ int setBenchmarks(const char *container, const char *element, int n, unsigned se
 	if (buffer == nullptr) return __LINE__;
 
 	srand(seed);
-	auto benchmarkRandomized = [&](std::function<void (clock_t&, clock_t&)> code){
-		return benchmark([&](clock_t& begin, clock_t& end){
-			for (int i = 0; i < n2; ++i) randomize(&buffer[i]);
-			code(begin, end);
-		});
-	};
+	for (int i = 0; i < n2; ++i) randomize(&buffer[i]);
 
-	volatile unsigned long store;
-
-	auto upsert = benchmarkRandomized([&](clock_t& begin, clock_t& end){
-		Set<T,Aux> set;
+	auto upsert = benchmark([&](clock_t& begin, clock_t& end){
+		auto set = Set<T,Aux>();
 		begin = clock();
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
+			auto& x = buffer[i];
 			set.upsert(x);
 		}
 		end = clock();
 	});
 
-	auto lookupFind = benchmarkRandomized([&](clock_t& begin, clock_t& end){
-		Set<T,Aux> set;
+	auto lookupFind = benchmark([&](clock_t& begin, clock_t& end){
+		auto set = Set<T,Aux>();
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
+			auto& x = buffer[i];
 			set.upsert(x);
 		}
 		begin = clock();
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
-			auto b = set.contains(x);
-			store = b;
+			auto& x = buffer[i];
+			if (!set.contains(x)) exit(__LINE__);
 		}
 		end = clock();
 	});
 
-	auto lookupFail = benchmarkRandomized([&](clock_t& begin, clock_t& end){
-		Set<T,Aux> set;
+	int rss = 0;
+	auto lookupFail = benchmark([&](clock_t& begin, clock_t& end){
+		auto set = Set<T,Aux>();
 		for (int i = 0; i < n2; ++i) {
-			auto x = buffer[i];
+			auto& x = buffer[i];
 			set.upsert(x);
 		}
+		rss = set.length() > rss ? set.length() : rss;
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
+			auto& x = buffer[i];
 			set.remove(x);
 		}
 		begin = clock();
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
-			auto b = set.contains(x);
-			store = b;
+			auto& x = buffer[i];
+			if (set.contains(x)) exit(__LINE__);
 		}
 		end = clock();
 	});
 
-	auto remove = benchmarkRandomized([&](clock_t& begin, clock_t& end){
-		Set<T,Aux> set;
+	auto remove = benchmark([&](clock_t& begin, clock_t& end){
+		auto set = Set<T,Aux>();
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
+			auto& x = buffer[i];
 			set.upsert(x);
 		}
 		begin = clock();
 		for (int i = 0; i < n; ++i) {
-			auto x = buffer[i];
+			auto& x = buffer[i];
 			set.remove(x);
 		}
 		end = clock();
@@ -144,8 +137,8 @@ int setBenchmarks(const char *container, const char *element, int n, unsigned se
 
 #define PRINT_RESULT(OP) \
 	printf( \
-		"container=%s\telement=%s\toperation=%s\tn=%d\tavg=%.3f\tstd=%.3f\tmin=%.3f\tmax=%.3f\n", \
-		container, element, #OP, n, accumulator_mean(&(OP)), \
+		"container=%s\telement=%s\toperation=%s\tn=%d\tres=%d\tavg=%.3f\tstd=%.3f\tmin=%.3f\tmax=%.3f\n", \
+		container, element, #OP, n, rss, accumulator_mean(&(OP)), \
 		accumulator_std(&(OP)), accumulator_min(&(OP)), accumulator_max(&(OP)) \
 	)
 	PRINT_RESULT(upsert);
@@ -165,6 +158,7 @@ struct StdSet {
 	void upsert(T x) { treeSet.insert(std::move(x)); }
 	bool contains(const T& x) const { return treeSet.count(x) != 0; }
 	void remove(const T& x) { treeSet.erase(x); }
+	std::size_t length() const { return treeSet.size(); }
 };
 
 int benchmarkStdSet(const char *element, int n) {
@@ -182,6 +176,7 @@ struct StdUnorderedSet {
 	void upsert(T x) { hashSet.insert(std::move(x)); }
 	bool contains(const T& x) const { return hashSet.count(x) != 0; }
 	void remove(const T& x) { hashSet.erase(x); }
+	std::size_t length() const { return hashSet.size(); }
 };
 
 int benchmarkStdUnorderedSet(const char *element, int n) {

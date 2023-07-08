@@ -19,15 +19,10 @@ Free-function version of [opCmp](https://dlang.org/spec/operatoroverloading.html
 for generic code.
 
 Can be used to efficiently compare both complex types with a custom `opCmp`, or primitive types.
-
-NOTE: this also implements a total order over floating-point types.
 +/
 int opCmp(T)(in T a, in T b) {
 	static if (__traits(hasMember, T, "opCmp") && !is(T == U*, U)) {
 		return a.opCmp(b);
-	} else static if (__traits(isFloating, T)) {
-		import std.math.operations : cmp;
-		return cmp(a, b);
 	} else {
 		if (a < b) return -1;
 		else if (a > b) return 1;
@@ -51,12 +46,6 @@ nothrow @nogc pure unittest {
 nothrow @nogc pure unittest {
 	assert( opCmp(uint.max, 1) > 0 );
 	assert( opCmp(int.min, 2)  < 0 );
-}
-
-nothrow @nogc pure unittest {
-	assert( opCmp(-double.nan, double.nan)       < 0 );
-	assert( opCmp(-double.nan, -double.infinity) < 0 );
-	assert( opCmp(double.infinity, double.nan)   < 0 );
 }
 
 

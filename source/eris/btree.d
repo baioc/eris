@@ -25,7 +25,7 @@ struct BTreeParameters {
 }
 
 // TODO: treat all T* as void* in user-facing templates -> should reduce bloat
-
+// TODO: implement order statistic btree operations (see wikipedia)
 
 /++
 B-tree data structure template.
@@ -36,7 +36,15 @@ deletions from a B-tree will move multiple elements around per operation,
 invalidating references and iterators).
 When elements are big, consider storing them through indirect references.
 
-If duplicate elements are allowed in the B-tree, they have unspecified order among themselves.
+$(B In order to ensure all memory is deallocated, remember to call [clear]).
+Alternatively, if stored elements don't need elaborate destruction, and the
+provided allocator supports arenas, a full deallocation called externally will
+not leave anything leaking (but beware of use-after-free bugs in this case).
+
+While keeping duplicates is not the default, it can be used to implement multisets
+and to enable [order statistic](https://en.wikipedia.org/wiki/Order_statistic_tree) operations.
+Just note that, if duplicate elements are allowed in the B-tree, they will have an
+unspecified order among themselves (i.e. not related to order of insertion).
 +/
 struct BTree(T, BTreeParameters params = BTreeParameters.init, Allocator = Mallocator)
 if (isAllocator!Allocator)
@@ -45,7 +53,7 @@ if (isAllocator!Allocator)
 	import std.algorithm.comparison : max;
 	import eris.core : move;
 
-	static struct NodeMetaData {
+	static struct NodeHeader {
 		import std.bitmanip : bitfields;
 		debug { // XXX: bitfields-as-a-lib doesn't play well with GDB
 			uint slotsInUse;
@@ -64,19 +72,20 @@ if (isAllocator!Allocator)
 	// multiple of cache line size, 256 (-metadata) was experimentally chosen
 	enum size_t nodeSlots = params.nodeSlots != size_t.max
 		? params.nodeSlots
-		: max(2, (256 - NodeMetaData.sizeof) / T.sizeof);
+		: max(2, (256 - NodeHeader.sizeof) / T.sizeof);
 	static assert(nodeSlots >= 2, "B-trees must have at least 2 elements per node");
+	static assert(nodeSlots < int.max, "nodes with that many elements are not supported");
 
 	// linear is faster than binary search for small arrays, so we only default
 	// to bsearch when our givenNodeSlots > 2 * defaultNodeSlots(u64)
-	enum size_t bsearchThreshold = 2 * (256 - NodeMetaData.sizeof) / double.sizeof;
+	enum size_t bsearchThreshold = 2 * (256 - NodeHeader.sizeof) / double.sizeof;
 	enum bool useBinarySearch =
 		params.useBinarySearch == Ternary.yes
 		|| (params.useBinarySearch == Ternary.unknown && nodeSlots > bsearchThreshold);
 
  private:
 	static struct TreeNode {
-		NodeMetaData metadata;
+		NodeHeader metadata;
 		T[nodeSlots] slots;
 		alias metadata this;
 		static TreeNode opCall(bool isInternal = false) {
@@ -230,7 +239,7 @@ if (isAllocator!Allocator)
 	}
 
 	/++
-	Removes (at most) one element from the tree, if it's there.
+	Removes (at most) one element from the tree.
 
 	Params:
 		x = element being looked up in the tree
@@ -299,8 +308,6 @@ if (isAllocator!Allocator)
 		if (pos >= 0) assert(compare(array[pos], x) == 0);
 		else assert((pos & ~(1 << 31)) <= array.length);
 	} do {
-		static assert(nodeSlots < int.max);
-
 		static if (useBinarySearch) {
 			int begin = 0;
 			int end = cast(int) array.length;
@@ -768,28 +775,33 @@ nothrow @nogc unittest {
 ///
 nothrow @nogc unittest {
 	static struct S {
-	 nothrow @nogc:
 		int x;
-		uint discriminator = 0;
+		uint discriminator;
+	 nothrow @nogc:
 		alias x this;
 		int opCmp(in S other) const => this.x - other.x;
 	}
 
 	enum BTreeParameters params = { allowDuplicates: true };
-	BTree!(S, params) btree;
-	scope(exit) btree.clear();
+	BTree!(S, params) multiset;
+	scope(exit) multiset.clear();
 	static const payload = [ S(6), S(2), S(4), S(5), S(6, 9), S(4, 20) ];
 
-	assert(btree.length == 0);
+	assert(multiset.length == 0);
 	foreach (x; payload) {
-		S* p = btree.put(x);
+		S* p = multiset.put(x);
 		assert(*p == x);
-		assert(x in btree);
+		assert(x in multiset);
 	}
-	assert(btree.length == payload.length);
+	assert(multiset.length == payload.length);
 
-	assert(S(4) in btree);
-	assert(S(4, 20) in btree);
-	assert(S(6) in btree);
-	assert(S(6, 9) in btree);
+	assert(multiset.remove(S(4)));
+	assert(S(4) in multiset);
+	assert(multiset.remove(S(4)));
+	assert(S(4) !in multiset);
+	assert(multiset.length == payload.length - 2u);
+
+	assert(multiset.remove(S(6)));
+	assert(multiset.remove(S(6)));
+	assert(!multiset.remove(S(6)));
 }
