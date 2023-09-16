@@ -3,7 +3,7 @@
 	"description": "A non-standard library for DasBetterC.",
 	"targetType": "library",
 
-	"license": "proprietary",
+	"license": "Zlib",
 	"copyright": "Copyright © 2023, Gabriel B. Sant'Anna",
 	"authors": ["Gabriel B. Sant'Anna"],
 
