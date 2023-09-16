@@ -3,20 +3,15 @@ strict digraph eris {
 
 	core [label="eris.core"];
 
-	math [label="eris.math"];
-
 	array [label="eris.array"];
+	array -> core
 
-	container [label="eris.container"];
+	math [label="eris.math"];
 
 	allocator [label="eris.allocator"];
 
-	btree [label="eris.btree", style="filled", fillcolor="lightgray"];
-	btree -> core;
+	btree [label="eris.btree"];
 	btree -> allocator;
 	btree -> array;
-
-	set [label="eris.set"];
-	set -> container;
-	set -> btree;
+	btree -> core;
 }

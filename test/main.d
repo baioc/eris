@@ -23,8 +23,6 @@ int runUnittests() {
 		"eris.math",
 		"eris.allocator",
 		"eris.btree",
-		"eris.container",
-		"eris.set",
 	];
 	static foreach (moduleName; moduleNames) {
 		mixin(`import ` ~ moduleName ~ `;`);
