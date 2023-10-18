@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>BTree (eris.btree.BTree)</title>
+	<meta charset="utf-8" />
+	<meta content="width=device-width, initial-scale=1" name="viewport" />
+        <link href="style.css" rel="stylesheet" />
+        <script src="script.js" type="text/javascript"></script>
+
+	
+	<link href="search-results.html" rel="prefetch" />
+</head>
+<body>
+	<div id="page-header">
+		<div id="logotype">
+		<span>Documentation</span>
+		<nav>
+			<a href="http://dlang.org/">Dlang.org</a>
+		</nav>
+		</div>
+
+		<form action="search-docs.html" id="search">
+			<input name="searchTerm" placeholder="Find a symbol name..." type="search" />
+			<input type="submit" value="Go" />
+		</form>
+	</div>
+	<div id="page-body">
+		<div id="page-content">
+		<h1>BTree</h1><div class="breadcrumbs"><a class="breadcrumb" href="eris.html">eris</a> <a class="breadcrumb" href="eris.btree.html">btree</a> </div><div><div class="documentation-comment synopsis"><div><p>B-tree data structure template.</p><p>B-trees are optimized for &quot;cache friendliness&quot; and low overhead per stored element.
+The main tradeoff w.r.t other self-balancing trees is that <b>insertions and
+deletions from a B-tree will move multiple elements around per operation,
+invalidating references and iterators</b>.
+When elements are big, consider storing them through indirect references.</p><p><b>In order to ensure all memory is deallocated, remember to call <a class="xref" href="eris.btree.BTree.clear.html">clear</a></b>.
+Alternatively, if stored elements don't need elaborate destruction, and the
+provided allocator supports arenas, a full deallocation called externally will
+not leave anything leaking (but beware of use-after-free bugs in this case).</p><p>While keeping duplicates is not the default, it can be used to implement multisets.
+Just note that, if duplicate elements are allowed in the B-tree, they will have an
+unspecified order among themselves (i.e. not related to order of insertion).</p></div></div></div><div class="annotated-prototype"><div class="aggregate-prototype"><div class="attributes"></div><span class="builtin-type">struct</span> BTree (<div class="parameters-list toplevel"><div class="template-parameter-item parameter-item">	<span><span class="name" data-ident="T">T</span></span></div><div class="template-parameter-item parameter-item">	<span><a class="xref" href="eris.btree.BTreeParameters.html" title="eris.btree.BTreeParameters"><span class="name" data-ident="BTreeParameters">BTreeParameters</span></a> <span class="name" data-ident="params">params</span> = <span class="name" data-ident="BTreeParameters">BTreeParameters</span>.<span class="name" data-ident="init">init</span></span></div><div class="template-parameter-item parameter-item">	<span><span class="name" data-ident="Allocator">Allocator</span> = <a class="xref" href="eris.allocator.Mallocator.html" title="eris.allocator.Mallocator"><span class="name" data-ident="Mallocator">Mallocator</span></a></span></div></div>) <a class="lang-feature" href="http://dpldocs.info/template-constraints">if</a> (<div class="template-constraint-expression"><span class="name" data-ident="isAllocator">isAllocator</span>!<span class="name" data-ident="Allocator">Allocator</span></div>) {<div class="aggregate-member"><a href="eris.btree.BTree.clear.html"><tt class="highlighted"><span class="type">void</span></tt> <span class="name">clear</span>();</a></div><div class="aggregate-member"><a href="eris.btree.BTree.opBinaryRight.html"><tt class="highlighted"><span class="type">bool</span></tt> <span class="name">opBinaryRight</span>(T x);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.opIndex.html"><tt class="highlighted"><span class="kwrd">inout</span>(<span class="hid">T</span>)*</tt> <span class="name">opIndex</span>(T x);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.length.html"><tt class="highlighted"><span class="hid">size_t</span></tt> <span class="name">length</span> [@property getter];</a></div><div class="aggregate-member"><a href="eris.btree.BTree.put.html"><tt class="highlighted"><span class="hid">T</span>*</tt> <span class="name">put</span>(T x);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.upsert.html"><tt class="highlighted"><span class="hid">T</span>*</tt> <span class="name">upsert</span>(T x, T delegate() nothrow @(nogc) create, void delegate(ref T) nothrow @(nogc) update);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.remove.html"><tt class="highlighted"><span class="type">bool</span></tt> <span class="name">remove</span>(T x, void delegate(ref T) nothrow @(nogc) destroy);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.opApply.1.html"><tt class="highlighted"><span class="type">int</span></tt> <span class="name">opApply</span>(int delegate(ref T) nothrow @(nogc) dg);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.opApply.2.html"><tt class="highlighted"><span class="type">int</span></tt> <span class="name">opApply</span>(int delegate(ref const(T)) nothrow @(nogc) dg);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.opEquals.html"><tt class="highlighted"><span class="type">bool</span></tt> <span class="name">opEquals</span>(const(BTree!(T, P, A)) other);</a></div><div class="aggregate-member"><a href="eris.btree.BTree.toHash.html"><tt class="highlighted"><span class="hid">size_t</span></tt> <span class="name">toHash</span>();</a></div>}</div></div><h2 id="members"><a class="header-anchor" href="#members">Members</a></h2><h3 class="member-list-header hide-from-toc" id="function"><a class="header-anchor" href="#function">Functions</a></h3><dl class="member-list native"><dt><a href="eris.btree.BTree.clear.html">clear</a><div class="simplified-prototype" style="max-width: 13ch;"><tt class="highlighted"><span class="type">void</span></tt> <span class="name">clear</span>()</div></dt><dd><div><p>Removes all elements and deallocates all memory for this tree.</p></div></dd><dt><a href="eris.btree.BTree.opApply.2.html">opApply</a><div class="simplified-prototype" style="max-width: 63ch;"><tt class="highlighted"><span class="type">int</span></tt> <span class="name">opApply</span>(int delegate(ref const(T)) nothrow @(nogc) dg)</div></dt><dd><div><p>Iterates over elements in order. NOTE: should not be used while inserting or deleting elements from the tree.</p></div></dd><dt><a href="eris.btree.BTree.opApply.1.html">opApply</a><div class="simplified-prototype" style="max-width: 56ch;"><tt class="highlighted"><span class="type">int</span></tt> <span class="name">opApply</span>(int delegate(ref T) nothrow @(nogc) dg)</div></dt><dd><div><p>Iterates over elements in order. NOTE: should not be used while inserting or deleting elements from the tree.</p></div></dd><dt><a href="eris.btree.BTree.opBinaryRight.html">opBinaryRight</a><div class="simplified-prototype" style="max-width: 25ch;"><tt class="highlighted"><span class="type">bool</span></tt> <span class="name">opBinaryRight</span>(T x)</div></dt><dd><div><p>Check if the tree contains an element.</p></div></dd><dt><a href="eris.btree.BTree.opEquals.html">opEquals</a><div class="simplified-prototype" style="max-width: 47ch;"><tt class="highlighted"><span class="type">bool</span></tt> <span class="name">opEquals</span>(const(BTree!(T, P, A)) other)</div></dt><dd><div><p>Element-wise comparison.</p></div></dd><dt><a href="eris.btree.BTree.opIndex.html">opIndex</a><div class="simplified-prototype" style="max-width: 24ch;"><tt class="highlighted"><span class="kwrd">inout</span>(<span class="hid">T</span>)*</tt> <span class="name">opIndex</span>(T x)</div></dt><dd><div><p>Gets the address of the first matching element, or <tt class="inline-code">null</tt> if it isn't in the tree.</p></div></dd><dt><a href="eris.btree.BTree.put.html">put</a><div class="simplified-prototype" style="max-width: 12ch;"><tt class="highlighted"><span class="hid">T</span>*</tt> <span class="name">put</span>(T x)</div></dt><dd><div><p>Adds an element to the tree.</p></div></dd><dt><a href="eris.btree.BTree.remove.html">remove</a><div class="simplified-prototype" style="max-width: 68ch;"><tt class="highlighted"><span class="type">bool</span></tt> <span class="name">remove</span>(T x, void delegate(ref T) nothrow @(nogc) destroy)</div></dt><dd><div><p>Removes (at most) one element from the tree.</p></div></dd><dt><a href="eris.btree.BTree.toHash.html">toHash</a><div class="simplified-prototype" style="max-width: 16ch;"><tt class="highlighted"><span class="hid">size_t</span></tt> <span class="name">toHash</span>()</div></dt><dd><div><p>Combined element hash.</p></div></dd><dt><a href="eris.btree.BTree.upsert.html">upsert</a><div class="simplified-prototype" style="max-width: 105ch;"><tt class="highlighted"><span class="hid">T</span>*</tt> <span class="name">upsert</span>(T x, T delegate() nothrow @(nogc) create, void delegate(ref T) nothrow @(nogc) update)</div></dt><dd><div><p>Updates an element already in the set or creates a new one therein.</p></div></dd></dl><h3 class="member-list-header hide-from-toc" id="property"><a class="header-anchor" href="#property">Properties</a></h3><dl class="member-list native"><dt><a href="eris.btree.BTree.length.html">length</a><div class="simplified-prototype" style="max-width: 35ch;"><tt class="highlighted"><span class="hid">size_t</span></tt> <span class="name">length</span> [@property getter]</div></dt><dd><div><p>Returns the number of elements currently stored in the tree.</p></div></dd></dl><div><h2 id="examples"><a class="header-anchor" href="#examples">Examples</a></h2><div class="documentation-comment"><div></div></div><div class="unittest-example-holder"><div class="documentation-comment"></div><pre class="d_code highlighted with-line-wrappers"><span class="br">1 </span><span class="com">// tip: debug w/ visualizer at https://www.cs.usfca.edu/~galles/visualization/BTree.html</span>
+<span class="br">2 </span><span class="kwrd">enum</span> <span class="hid">BTreeParameters</span> <span class="hid">params</span> = {
+<span class="br">3 </span>	<span class="hid">nodeSlots</span>: <span class="num">3</span>,
+<span class="br">4 </span>	<span class="hid">customCompare</span>: <span class="kwrd">true</span>,
+<span class="br">5 </span>	<span class="hid">useBinarySearch</span>: <span class="hid">Ternary</span>.<span class="hid">yes</span>,
+<span class="br">6 </span>};
+<span class="br">7 </span><span class="kwrd">auto</span> <span class="hid">btree</span> = <span class="hid">BTree</span>!(<span class="type">int</span>, <span class="hid">params</span>)((<span class="kwrd">ref</span> <span class="hid">a</span>, <span class="kwrd">ref</span> <span class="hid">b</span>) =&gt; <span class="hid">a</span> - <span class="hid">b</span>);
+<span class="br">8 </span><span class="kwrd">static</span> <span class="kwrd">const</span> <span class="hid">payload</span> = [
+<span class="br">9 </span>	<span class="num">34</span>, <span class="num">33</span>, <span class="num">38</span>,
+<span class="br">10 </span>	<span class="num">28</span>, <span class="num">27</span>, <span class="num">22</span>,
+<span class="br">11 </span>	<span class="num">30</span>, <span class="num">21</span>, <span class="num">24</span>,
+<span class="br">12 </span>	<span class="num">18</span>, <span class="num">19</span>, <span class="num">20</span>, <span class="num">26</span>, <span class="num">32</span>, <span class="num">42</span>,
+<span class="br">13 </span>	<span class="num">23</span>,
+<span class="br">14 </span>];
+<span class="br">15 </span>
+<span class="br">16 </span><span class="kwrd">assert</span>(<span class="hid">btree</span>.<span class="hid">length</span> == <span class="num">0</span>);
+<span class="br">17 </span><span class="kwrd">foreach</span> (<span class="hid">x</span>; <span class="hid">payload</span>) {
+<span class="br">18 </span>	<span class="com">// at first, the set does not contain x</span>
+<span class="br">19 </span>	<span class="kwrd">assert</span>(<span class="hid">x</span> !<span class="kwrd">in</span> <span class="hid">btree</span>);
+<span class="br">20 </span>	<span class="kwrd">assert</span>(!<span class="hid">btree</span>.<span class="hid">remove</span>(<span class="hid">x</span>));
+<span class="br">21 </span>	<span class="com">// insert x and test returned address</span>
+<span class="br">22 </span>	<span class="type">int</span>* <span class="hid">p</span> = <span class="hid">btree</span>.<span class="hid">put</span>(<span class="hid">x</span>);
+<span class="br">23 </span>	<span class="kwrd">assert</span>(*<span class="hid">p</span> == <span class="hid">x</span>);
+<span class="br">24 </span>	<span class="com">// now it does contain x, so test lookup</span>
+<span class="br">25 </span>	<span class="kwrd">assert</span>(<span class="hid">x</span> <span class="kwrd">in</span> <span class="hid">btree</span>);
+<span class="br">26 </span>	<span class="kwrd">assert</span>(<span class="hid">p</span> == <span class="hid">btree</span>[<span class="hid">x</span>]);
+<span class="br">27 </span>	<span class="com">// redundant insert is redundant</span>
+<span class="br">28 </span>	<span class="type">int</span>* <span class="hid">q</span> = <span class="hid">btree</span>.<span class="hid">put</span>(<span class="hid">x</span>);
+<span class="br">29 </span>	<span class="kwrd">assert</span>(<span class="hid">q</span> == <span class="hid">p</span>);
+<span class="br">30 </span>}
+<span class="br">31 </span>
+<span class="br">32 </span><span class="com">// sanity check: the b-tree didn't come up with new elements we didn't insert</span>
+<span class="br">33 </span><span class="kwrd">assert</span>(<span class="hid">btree</span>.<span class="hid">length</span> == <span class="hid">payload</span>.<span class="hid">length</span>);
+<span class="br">34 </span><span class="kwrd">foreach</span> (<span class="kwrd">ref</span> <span class="kwrd">const</span> <span class="hid">x</span>; <span class="hid">btree</span>) {
+<span class="br">35 </span>	<span class="kwrd">import</span> <span class="hid">std</span>.<span class="hid">algorithm</span>.<span class="hid">searching</span> : <span class="hid">canFind</span>;
+<span class="br">36 </span>	<span class="kwrd">assert</span>(<span class="hid">payload</span>.<span class="hid">canFind</span>(<span class="hid">x</span>));
+<span class="br">37 </span>}
+<span class="br">38 </span>
+<span class="br">39 </span><span class="com">// remove all but the last 3 elements in reverse order</span>
+<span class="br">40 </span><span class="kwrd">for</span> (<span class="type">int</span> <span class="hid">n</span> = <span class="num">1</span>; <span class="hid">n</span> + <span class="num">2</span> &lt; <span class="hid">payload</span>.<span class="hid">length</span>; ++<span class="hid">n</span>) {
+<span class="br">41 </span>	<span class="kwrd">auto</span> <span class="hid">x</span> = <span class="hid">payload</span>[$ - <span class="hid">n</span>];
+<span class="br">42 </span>	<span class="kwrd">assert</span>(<span class="hid">x</span> <span class="kwrd">in</span> <span class="hid">btree</span>);
+<span class="br">43 </span>	<span class="hid">btree</span>.<span class="hid">remove</span>(<span class="hid">x</span>);
+<span class="br">44 </span>	<span class="kwrd">assert</span>(<span class="hid">x</span> !<span class="kwrd">in</span> <span class="hid">btree</span>);
+<span class="br">45 </span>	<span class="kwrd">assert</span>(<span class="hid">btree</span>.<span class="hid">length</span> == <span class="hid">payload</span>.<span class="hid">length</span> - <span class="hid">n</span>);
+<span class="br">46 </span>}
+<span class="br">47 </span><span class="kwrd">assert</span>(<span class="hid">btree</span>.<span class="hid">length</span> == <span class="num">3</span>);
+<span class="br">48 </span>
+<span class="br">49 </span><span class="com">// make sure we test aggregate equality</span>
+<span class="br">50 </span><span class="kwrd">auto</span> <span class="hid">other</span> = <span class="hid">BTree</span>!<span class="type">int</span>();
+<span class="br">51 </span><span class="kwrd">assert</span>(<span class="hid">btree</span> != <span class="hid">other</span>);
+<span class="br">52 </span><span class="kwrd">import</span> <span class="hid">std</span>.<span class="hid">range</span>.<span class="hid">primitives</span> : <span class="hid">put</span>;
+<span class="br">53 </span><span class="kwrd">static</span> <span class="kwrd">const</span> <span class="hid">remaining</span> = [<span class="num">33</span>, <span class="num">34</span>, <span class="num">38</span>];
+<span class="br">54 </span><span class="hid">put</span>(<span class="hid">other</span>, <span class="hid">remaining</span>);
+<span class="br">55 </span><span class="kwrd">assert</span>(<span class="hid">btree</span> == <span class="hid">other</span>);
+<span class="br">56 </span>
+<span class="br">57 </span><span class="com">// clear gets rid of the rest</span>
+<span class="br">58 </span><span class="hid">btree</span>.<span class="hid">clear</span>();
+<span class="br">59 </span><span class="kwrd">assert</span>(<span class="hid">btree</span>.<span class="hid">length</span> == <span class="num">0</span>);
+<span class="br">60 </span><span class="kwrd">foreach</span> (<span class="hid">x</span>; <span class="hid">payload</span>) <span class="kwrd">assert</span>(<span class="hid">x</span> !<span class="kwrd">in</span> <span class="hid">btree</span>);</pre></div><div class="unittest-example-holder"><div class="documentation-comment"></div><pre class="d_code highlighted"><span class="kwrd">static</span> <span class="kwrd">struct</span> <span class="hid">S</span> {
+	<span class="type">int</span> <span class="hid">x</span>;
+	<span class="type">uint</span> <span class="hid">discriminator</span>;
+ <span class="kwrd">nothrow</span> @<span class="hid">nogc</span>:
+	<span class="kwrd">alias</span> <span class="hid">x</span> <span class="kwrd">this</span>;
+	<span class="type">int</span> <span class="hid">opCmp</span>(<span class="kwrd">in</span> <span class="hid">S</span> <span class="hid">other</span>) <span class="kwrd">const</span> =&gt; <span class="kwrd">this</span>.<span class="hid">x</span> - <span class="hid">other</span>.<span class="hid">x</span>;
+}
+
+<span class="kwrd">enum</span> <span class="hid">BTreeParameters</span> <span class="hid">params</span> = { <span class="hid">allowDuplicates</span>: <span class="kwrd">true</span> };
+<span class="hid">BTree</span>!(<span class="hid">S</span>, <span class="hid">params</span>) <span class="hid">multiset</span>;
+<span class="kwrd">scope</span>(<span class="hid">exit</span>) <span class="hid">multiset</span>.<span class="hid">clear</span>();
+<span class="kwrd">static</span> <span class="kwrd">const</span> <span class="hid">payload</span> = [ <span class="hid">S</span>(<span class="num">6</span>), <span class="hid">S</span>(<span class="num">2</span>), <span class="hid">S</span>(<span class="num">4</span>), <span class="hid">S</span>(<span class="num">5</span>), <span class="hid">S</span>(<span class="num">6</span>, <span class="num">9</span>), <span class="hid">S</span>(<span class="num">4</span>, <span class="num">20</span>) ];
+
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">length</span> == <span class="num">0</span>);
+<span class="kwrd">foreach</span> (<span class="hid">x</span>; <span class="hid">payload</span>) {
+	<span class="hid">S</span>* <span class="hid">p</span> = <span class="hid">multiset</span>.<span class="hid">put</span>(<span class="hid">x</span>);
+	<span class="kwrd">assert</span>(*<span class="hid">p</span> == <span class="hid">x</span>);
+	<span class="kwrd">assert</span>(<span class="hid">x</span> <span class="kwrd">in</span> <span class="hid">multiset</span>);
+}
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">length</span> == <span class="hid">payload</span>.<span class="hid">length</span>);
+
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">remove</span>(<span class="hid">S</span>(<span class="num">4</span>)));
+<span class="kwrd">assert</span>(<span class="hid">S</span>(<span class="num">4</span>) <span class="kwrd">in</span> <span class="hid">multiset</span>);
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">remove</span>(<span class="hid">S</span>(<span class="num">4</span>)));
+<span class="kwrd">assert</span>(<span class="hid">S</span>(<span class="num">4</span>) !<span class="kwrd">in</span> <span class="hid">multiset</span>);
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">length</span> == <span class="hid">payload</span>.<span class="hid">length</span> - <span class="num">2u</span>);
+
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">remove</span>(<span class="hid">S</span>(<span class="num">6</span>)));
+<span class="kwrd">assert</span>(<span class="hid">multiset</span>.<span class="hid">remove</span>(<span class="hid">S</span>(<span class="num">6</span>)));
+<span class="kwrd">assert</span>(!<span class="hid">multiset</span>.<span class="hid">remove</span>(<span class="hid">S</span>(<span class="num">6</span>)));</pre></div></div></div>
+		<div id="page-nav"><a class="parent" href="eris.html">eris</a> <a class="parent" href="eris.btree.html">btree</a> 
+		<span class="type-separator">structs</span><ul><li><a class="struct current" href="eris.btree.BTree.html">BTree</a></li><li><a class="struct" href="eris.btree.BTreeParameters.html">BTreeParameters</a></li></ul></div>
+	</div>
+	<div id="page-footer">Page generated by <a href="https://github.com/adamdruppe/adrdox">adrdox</a></div>
+</body>
+</html>
