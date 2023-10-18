@@ -41,8 +41,7 @@ Alternatively, if stored elements don't need elaborate destruction, and the
 provided allocator supports arenas, a full deallocation called externally will
 not leave anything leaking (but beware of use-after-free bugs in this case).
 
-While keeping duplicates is not the default, it can be used to implement multisets
-and to enable [order statistic](https://en.wikipedia.org/wiki/Order_statistic_tree) operations.
+While keeping duplicates is not the default, it can be used to implement multisets.
 Just note that, if duplicate elements are allowed in the B-tree, they will have an
 unspecified order among themselves (i.e. not related to order of insertion).
 +/
@@ -593,7 +592,7 @@ if (isAllocator!Allocator)
 	in (parent != null && index <= nodeSlots && child != null)
 	{
 		const int target = index;
-		for (int i = parent.slotsInUse; i - 1 >= target; --i) {
+		for (int i = parent.slotsInUse; i >= target + 1; --i) {
 			setChild(parent, i, move(parent.children[i - 1]));
 		}
 		setChild(parent, index, child);
